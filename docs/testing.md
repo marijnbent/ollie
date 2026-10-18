@@ -87,6 +87,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `palette-navigation-test` | `Palette/PaletteState.swift`'s screen motions — `prepare`, `replace`, `push`, `pop` |
 | `palette-selection-test` | `Features/PaletteRowIndex.swift` |
 | `clipboard-coordinator-test` | Feature-specific operation cancellation, pending OCR completion, editor cancellation, and selection during asynchronous refreshes |
+| `snippet-expansion-test` | Actual snippet key handler and native text editing: completing-key suppression, ordered replacement, preceding text, ambiguous prefixes, backspace, and generated input |
 | `interface-size-test` | `DesignSystem/InterfaceMetrics.swift`, `Features/Settings/InterfaceSize.swift`, `Extensions/Model/ExtensionFormMetrics.swift` |
 | `palette-surface-test` | Unified launcher and clipboard sizing, stable anchors across modes, and continuous panel geometry |
 | `palette-placement-test` | `DesignSystem/Theme.swift`, `Palette/PalettePlacement.swift` |

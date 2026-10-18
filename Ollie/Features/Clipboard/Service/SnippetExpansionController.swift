@@ -16,6 +16,7 @@ final class SnippetExpansionController {
 
     private let generatedEventMarker: Int64 = Paster.ollieEventTag
     private let store: SnippetStore
+    private let frontmostApplication: () -> NSRunningApplication?
     private lazy var suggestionWindowController = SnippetSuggestionWindowController(
         onSelectSnippet: { [weak self] snippet in
             self?.expand(snippet)
@@ -44,8 +45,12 @@ final class SnippetExpansionController {
     private var lastObserverLogKey: String?
     private var lastActivationLogKey: String?
 
-    init(store: SnippetStore) {
+    init(
+        store: SnippetStore,
+        frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }
+    ) {
         self.store = store
+        self.frontmostApplication = frontmostApplication
     }
 
     var isRunning: Bool {
@@ -65,7 +70,7 @@ final class SnippetExpansionController {
             callback: { proxy, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
                 let controller = Unmanaged<SnippetExpansionController>.fromOpaque(userInfo).takeUnretainedValue()
-                return controller.handle(proxy: proxy, type: type, event: event)
+                return controller.handle(type: type, event: event) { $0.tapPostEvent(proxy) }
             },
             userInfo: UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         ) else {
@@ -113,7 +118,7 @@ final class SnippetExpansionController {
         }
     }
 
-    private func handle(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handle(type: CGEventType, event: CGEvent, postEvent: (CGEvent) -> Void) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let eventTap {
                 CGEvent.tapEnable(tap: eventTap, enable: true)
@@ -129,15 +134,17 @@ final class SnippetExpansionController {
             return Unmanaged.passUnretained(event)
         }
 
-        if shouldConsumeControlKey(nsEvent) {
+        if shouldConsumeControlKey(nsEvent, postEvent: postEvent) {
             return nil
         }
 
-        processTextKey(nsEvent)
+        if processTextKey(nsEvent, postEvent: postEvent) {
+            return nil
+        }
         return Unmanaged.passUnretained(event)
     }
 
-    private func shouldConsumeControlKey(_ event: NSEvent) -> Bool {
+    private func shouldConsumeControlKey(_ event: NSEvent, postEvent: (CGEvent) -> Void) -> Bool {
         switch event.keyCode {
         case 53: // Escape
             guard isSessionActive else { return false }
@@ -159,12 +166,10 @@ final class SnippetExpansionController {
             guard suggestionWindowController.isVisible,
                   let snippet = selectedSnippet,
                   shouldCommitSnippetSelectionOnReturn else { return false }
-            expand(snippet)
-            return true
+            return expand(snippet, postEvent: postEvent)
         case 48: // Tab
             guard suggestionWindowController.isVisible, let snippet = selectedSnippet else { return false }
-            expand(snippet)
-            return true
+            return expand(snippet, postEvent: postEvent)
         case 51: // Backspace
             guard let activeQuery else { return false }
             if activeQuery.isEmpty {
@@ -180,7 +185,7 @@ final class SnippetExpansionController {
         }
     }
 
-    private func processTextKey(_ event: NSEvent) {
+    private func processTextKey(_ event: NSEvent, postEvent: (CGEvent) -> Void) -> Bool {
         let disallowedModifiers = event.modifierFlags.intersection([.command, .control, .option])
         let characters = event.characters ?? ""
 
@@ -188,35 +193,43 @@ final class SnippetExpansionController {
             if isSessionActive {
                 cancelSession()
             }
-            return
+            return false
         }
 
         if characters == ">" && disallowedModifiers.isEmpty {
             startSession()
-            return
+            return false
         }
 
-        guard let activeQuery else { return }
+        guard let activeQuery else { return false }
 
         if !disallowedModifiers.isEmpty {
             cancelSession()
-            return
+            return false
         }
+
+        if event.keyCode == 51 { return false }
 
         guard Snippet.isSupportedTriggerCharacter(characters) else {
             cancelSession()
-            return
+            return false
         }
 
         let normalizedCharacters = Snippet.normalizeTrigger(characters)
         if normalizedCharacters.count == 1, let scalar = normalizedCharacters.first {
             self.activeQuery = activeQuery + String(scalar)
             selectedIndex = 0
+            if let query = self.activeQuery,
+               let exactMatch = exactMatch(for: query),
+               SnippetExpansionPolicy.shouldAutoExpand(exactMatch, among: store.expansionMatches(for: query)) {
+                return expand(exactMatch, pendingCharacterCount: 1, postEvent: postEvent)
+            }
             refreshSuggestionsAsync()
-            return
+            return false
         }
 
         cancelSession()
+        return false
     }
 
     private func refreshSuggestionsAsync() {
@@ -241,12 +254,6 @@ final class SnippetExpansionController {
         ensureObservationTargetCurrent()
 
         let allMatches = store.expansionMatches(for: activeQuery)
-
-        if let exactMatch = exactMatch(for: activeQuery),
-           SnippetExpansionPolicy.shouldAutoExpand(exactMatch, among: allMatches) {
-            expand(exactMatch)
-            return
-        }
 
         matches = Array(allMatches.prefix(Self.maximumVisibleSuggestions))
         if selectedIndex >= matches.count {
@@ -312,41 +319,40 @@ final class SnippetExpansionController {
         ensureObservationTargetCurrent(force: true)
     }
 
-    private func expand(_ snippet: Snippet) {
-        let deleteCount = (activeQuery?.count ?? 0) + 1
+    @discardableResult
+    private func expand(
+        _ snippet: Snippet,
+        pendingCharacterCount: Int = 0,
+        postEvent: (CGEvent) -> Void = { $0.post(tap: .cgAnnotatedSessionEventTap) }
+    ) -> Bool {
+        let deleteCount = (activeQuery?.count ?? 0) + 1 - pendingCharacterCount
+        guard let events = replacementEvents(deleting: deleteCount, inserting: snippet.content) else { return false }
         cancelSession()
         store.recordUsage(for: snippet.id)
-        deleteTypedTrigger(characterCount: deleteCount)
-        insertText(snippet.content)
+        for event in events { postEvent(event) }
         playInsertionSound()
+        return true
     }
 
-    private func deleteTypedTrigger(characterCount: Int) {
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
-
+    private func replacementEvents(deleting characterCount: Int, inserting text: String) -> [CGEvent]? {
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return nil }
+        var events: [CGEvent] = []
         for _ in 0..<characterCount {
-            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true)
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false)
-            keyDown?.setIntegerValueField(.eventSourceUserData, value: generatedEventMarker)
-            keyUp?.setIntegerValueField(.eventSourceUserData, value: generatedEventMarker)
-            keyDown?.post(tap: .cgAnnotatedSessionEventTap)
-            keyUp?.post(tap: .cgAnnotatedSessionEventTap)
+            guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true),
+                  let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false) else { return nil }
+            events.append(contentsOf: [keyDown, keyUp])
         }
-    }
-
-    private func insertText(_ text: String) {
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
-
         let utf16 = Array(text.utf16)
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
-        keyDown?.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
-        keyUp?.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        keyDown?.setIntegerValueField(.eventSourceUserData, value: generatedEventMarker)
-        keyUp?.setIntegerValueField(.eventSourceUserData, value: generatedEventMarker)
-
-        keyDown?.post(tap: .cgAnnotatedSessionEventTap)
-        keyUp?.post(tap: .cgAnnotatedSessionEventTap)
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else { return nil }
+        keyDown.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+        keyUp.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+        events.append(contentsOf: [keyDown, keyUp])
+        for event in events {
+            event.flags = []
+            event.setIntegerValueField(.eventSourceUserData, value: generatedEventMarker)
+        }
+        return events
     }
 
     private func caretRect(for focusedElement: AXUIElement) -> CGRect? {
@@ -404,7 +410,7 @@ final class SnippetExpansionController {
     }
 
     private func resolveSessionAnchor() -> AnchorResolution {
-        let frontmostApplication = NSWorkspace.shared.frontmostApplication
+        let frontmostApplication = frontmostApplication()
         let bundleIdentifier = frontmostApplication?.bundleIdentifier
         let processID = frontmostApplication?.processIdentifier
         let focusedElement = currentFocusedElement()
@@ -438,7 +444,7 @@ final class SnippetExpansionController {
     }
 
     private var isTypingInsideClippie: Bool {
-        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else {
+        guard let frontmostApplication = frontmostApplication() else {
             return false
         }
 
@@ -648,7 +654,7 @@ final class SnippetExpansionController {
     }
 
     private func ensureObservationTargetCurrent(force: Bool = false) {
-        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else {
+        guard let frontmostApplication = frontmostApplication() else {
             stopObservingActiveTarget()
             return
         }
