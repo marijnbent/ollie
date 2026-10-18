@@ -35,6 +35,7 @@ struct InterfaceMetrics: Equatable, Sendable {
     }
 
     struct Radius: Equatable, Sendable {
+        var snippetSelection: CGFloat { scaledPoints(Theme.Radius.snippetSelection, scale) }
         let scale: CGFloat
 
         var panel: CGFloat { scaledPoints(Theme.Radius.panel, scale) }
@@ -56,8 +57,9 @@ struct InterfaceMetrics: Equatable, Sendable {
     }
 
     struct Size: Equatable, Sendable {
-        var snippetPopupWidth: CGFloat { scaledPoints(Theme.Size.snippetPopupWidth, scale) }
-        var snippetListWidth: CGFloat { scaledPoints(Theme.Size.snippetListWidth, scale) }
+        var snippetMinimumWidth: CGFloat { scaledPoints(Theme.Size.snippetMinimumWidth, scale) }
+        var snippetMaximumWidth: CGFloat { scaledPoints(Theme.Size.snippetMaximumWidth, scale) }
+        var snippetRowHeight: CGFloat { scaledPoints(Theme.Size.snippetRowHeight, scale) }
         var detailListWidth: CGFloat { scaledPoints(Theme.Size.detailListWidth, scale) }
         let scale: CGFloat
 

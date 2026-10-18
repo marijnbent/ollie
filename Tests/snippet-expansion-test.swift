@@ -140,7 +140,73 @@ struct SnippetExpansionTests {
         controller.stop()
         check("usage counts expansions once", store.exactTriggerMatch(for: "fi")?.usageCount == 2)
 
-        let result = failures == 0 ? "PASS: snippet event ordering, insertion, boundaries and placement"
+        func popup() -> NSWindow? {
+            NSApp.windows.first { $0.identifier?.rawValue == "snippet-suggestions" }
+        }
+
+        type(" ")
+        type(">")
+        check("bare prefix opens suggestions immediately", popup()?.isVisible == true)
+        let ranked = store.matches(for: "")
+        check("popup hugs fewer than six rows", popup()?.frame.height ==
+            CGFloat(ranked.count) * Theme.Size.snippetRowHeight + Theme.Spacing.sm * 2)
+        check("empty query ranks frequent snippets first", ranked.first?.trigger == "fi")
+        check("empty query breaks equal usage by recency", ranked.firstIndex {
+            $0.trigger == "long"
+        }! < ranked.firstIndex { $0.trigger == "p" }!)
+        check("empty query Return passes through without navigation", !type("\r", keyCode: 36))
+        check("Return ends the empty session", popup()?.isVisible == false)
+        type(" ")
+        type(">")
+        let beforeTab = String(editor.string.dropLast())
+        check("Tab accepts the top empty-query suggestion", type("\t", keyCode: 48))
+        check("Tab inserts the highest-ranked snippet", editor.string == beforeTab + ranked[0].content)
+        check("Tab hides the popup", popup()?.isVisible == false)
+
+        type(" ")
+        type(">")
+        let nextRanked = store.matches(for: "")
+        check("Down navigates the empty-query list", type("", keyCode: 125))
+        check("Return accepts after arrow navigation", type("\r", keyCode: 36))
+        check("arrow selection inserts the second ranked snippet", editor.string.hasSuffix(nextRanked[1].content))
+        type(" ")
+        type(">")
+        check("Up navigates at the first empty-query row", type("", keyCode: 126))
+        check("Return accepts after Up at the first row", type("\r", keyCode: 36))
+        type(" ")
+        type(">")
+        check("Escape dismisses the empty-query list", type("", keyCode: 53))
+        check("Escape hides the popup", popup()?.isVisible == false)
+        check("Return after Escape passes through", !type("\r", keyCode: 36))
+        type(" ")
+        type(">")
+        check("deleting the bare prefix passes through", !type("\u{8}", keyCode: 51))
+        check("deleting the bare prefix hides suggestions", popup()?.isVisible == false)
+        check("Tab after deleting the prefix passes through", !type("\t", keyCode: 48))
+
+        for index in 0..<8 {
+            try store.saveSnippet(title: "Extra \(index)", trigger: "extra\(index)", content: "Extra content \(index)")
+        }
+        type(" ")
+        type(">")
+        let allRanked = store.matches(for: "")
+        check("popup height caps at six dense rows", popup()?.frame.height ==
+            CGFloat(Theme.Size.snippetVisibleRows) * Theme.Size.snippetRowHeight + Theme.Spacing.sm * 2)
+        check("popup width stays within compact bounds", popup().map {
+            $0.frame.width >= Theme.Size.snippetMinimumWidth && $0.frame.width <= Theme.Size.snippetMaximumWidth
+        } == true)
+        for _ in 0..<7 { type("", keyCode: 125) }
+        check("Return can accept a suggestion beyond the visible rows", type("\r", keyCode: 36))
+        check("suggestions are not truncated to the visible row count", editor.string.hasSuffix(allRanked[7].content))
+        for snippet in store.snippets where snippet.trigger != "p" { store.deleteSnippet(id: snippet.id) }
+        type(" ")
+        type(">")
+        check("one suggestion occupies exactly one row", popup()?.frame.height ==
+            Theme.Size.snippetRowHeight + Theme.Spacing.sm * 2)
+        check("short content hugs the minimum width", popup()?.frame.width == Theme.Size.snippetMinimumWidth)
+        controller.stop()
+
+        let result = failures == 0 ? "PASS: snippet event ordering, insertion, boundaries, placement and empty-query suggestions"
             : "FAIL: \(failures) snippet checks"
         print(result)
         if failures > 0 { exit(1) }

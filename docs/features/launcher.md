@@ -798,11 +798,21 @@ the rest of the menu already has ([palette.md](palette.md)). Only `LauncherList`
 Outside Ollie, `>` starts an inline snippet query at the start of a line or after whitespace.
 The boundary comes from the focused AX value and selection when readable, otherwise from the last
 physical keystroke. Operators and tags such as `->`, `=>`, `a>b` and `<div>` do not start a query.
-Queries rank trigger matches ahead of title and content matches, showing up to six suggestions.
-The left column shows each trigger and title; the right previews the selected snippet's literal
-content, preserving whitespace and fading overflow. Hover or arrow keys select; click, Return or Tab
-insert the selected snippet, and Escape dismisses. An exact trigger still auto-expands only when no
-other trigger extends it; title/content matches never change that decision.
+Typing `>` immediately opens all snippets ranked by usage count, then most recent use. Typed queries
+rank trigger matches ahead of title and content matches. The compact single-column HUD-glass panel
+hugs its content between `snippetMinimumWidth` (220) and `snippetMaximumWidth` (380), scaled by
+Interface Size. Each `snippetRowHeight` (34) row shows a bold trigger followed by its title or a
+single-line content excerpt in secondary ink. The selected row uses the window switcher's system
+selection colours and `snippetSelection` (4) corners. Outer padding is `sm` (6), row horizontal
+padding and the text gap are `md` (8), and the panel uses `menuPanel` (16) corners. Height follows the
+actual row count up to `snippetVisibleRows` (6); remaining matches scroll with keyboard selection.
+There is no separate preview or footer.
+
+Hover or arrow keys select; click or Tab inserts the selected snippet. Return inserts for a typed
+query, or after arrow navigation on an empty query. A bare `>` followed by Return passes through
+and ends the session, preserving chat send behaviour. Escape dismisses, and Backspace over `>`
+ends the session while deleting the prefix normally. An exact trigger still auto-expands only when
+no other trigger extends it; title/content matches never change that decision.
 
 The completing keystroke is consumed synchronously. `TextInjector` first replaces the already-forwarded
 trigger range through Accessibility, checking the trigger suffix before writing and reading the value
@@ -820,5 +830,6 @@ clamps to the anchor screen's visible frame and flips above the anchor when need
 
 Both windows are non-activating and never become key. A fallback position also shows a separate
 click-through gradient over that display, below the popup, across Spaces and full-screen apps.
-Caret positions have no gradient. Reduce Motion disables its fade; Reduce Transparency replaces its
+The gradient appears and dismisses with the popup, including the empty query. Caret positions have
+no gradient. Reduce Motion disables its fade; Reduce Transparency replaces its
 gradient with a uniform appearance-aware dim. The popup uses the shared HUD glass and opaque treatment.

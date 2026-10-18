@@ -255,18 +255,9 @@ final class SnippetExpansionController {
             return
         }
 
-        guard !activeQuery.isEmpty else {
-            matches = []
-            selectedIndex = 0
-            suggestionWindowController.hide()
-            return
-        }
-
         ensureObservationTargetCurrent()
 
-        let allMatches = store.matches(for: activeQuery)
-
-        matches = Array(allMatches.prefix(Theme.Size.snippetVisibleRows))
+        matches = store.matches(for: activeQuery)
         if selectedIndex >= matches.count {
             selectedIndex = max(0, matches.count - 1)
         }
@@ -316,7 +307,6 @@ final class SnippetExpansionController {
     private func selectSuggestion(at index: Int) {
         guard matches.indices.contains(index), selectedIndex != index else { return }
         selectedIndex = index
-        hasNavigatedSuggestions = true
         suggestionWindowController.update(snippets: matches, selectedIndex: selectedIndex)
     }
 
@@ -328,7 +318,7 @@ final class SnippetExpansionController {
         sessionAnchorRect = nil
         sessionAnchorStrategy = nil
         lastAnchorLogKey = nil
-        ensureObservationTargetCurrent(force: true)
+        refreshSuggestions()
     }
 
     @discardableResult
@@ -676,13 +666,13 @@ final class SnippetExpansionController {
             from: accessibilityRect, primaryScreenHeight: primary.frame.height)
     }
 
-    private func ensureObservationTargetCurrent(force: Bool = false) {
+    private func ensureObservationTargetCurrent() {
         guard let frontmostApplication = frontmostApplication() else {
             stopObservingActiveTarget()
             return
         }
 
-        if !force, observedApplication?.processIdentifier == frontmostApplication.processIdentifier {
+        if observedApplication?.processIdentifier == frontmostApplication.processIdentifier {
             refreshObservedElements()
             return
         }
@@ -1081,6 +1071,7 @@ private final class SnippetSuggestionWindowController: NSWindowController {
         let panel = SnippetPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.identifier = NSUserInterfaceItemIdentifier("snippet-suggestions")
         panel.level = .floating
         panel.isFloatingPanel = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
@@ -1104,9 +1095,9 @@ private final class SnippetSuggestionWindowController: NSWindowController {
         guard let screen else { return }
         let visibleFrame = screen.visibleFrame.insetBy(dx: metrics.spacing.md, dy: metrics.spacing.md)
         let size = CGSize(
-            width: min(metrics.size.snippetPopupWidth, visibleFrame.width),
-            height: min(CGFloat(max(Theme.Size.snippetMinimumRows, snippets.count)) * metrics.size.launcherRowHeight
-                + metrics.size.barButtonHeight + metrics.spacing.sm * 2, visibleFrame.height))
+            width: min(popupWidth(for: snippets, metrics: metrics), visibleFrame.width),
+            height: min(CGFloat(min(Theme.Size.snippetVisibleRows, snippets.count)) * metrics.size.snippetRowHeight
+                + metrics.spacing.sm * 2, visibleFrame.height))
         let origin = SnippetExpansionPolicy.popupOrigin(
             anchor: anchorRect, size: size, visibleFrame: visibleFrame,
             centered: anchorStrategy == .screenCenter, gap: metrics.spacing.md)
@@ -1117,6 +1108,19 @@ private final class SnippetSuggestionWindowController: NSWindowController {
             overlay.show(on: screen, popupFrame: CGRect(origin: origin, size: size))
         }
         window?.orderFrontRegardless()
+    }
+
+    private func popupWidth(for snippets: [Snippet], metrics: InterfaceMetrics) -> CGFloat {
+        let triggerFont = metrics.typography.textNSFont(.body, weight: .bold)
+        let detailFont = metrics.typography.textNSFont(.body)
+        let contentWidth = snippets.map { snippet in
+            (">\(snippet.trigger)" as NSString).size(withAttributes: [.font: triggerFont]).width
+                + (snippet.suggestionDetail as NSString).size(withAttributes: [.font: detailFont]).width
+                + metrics.spacing.md
+        }.max() ?? 0
+        return min(metrics.size.snippetMaximumWidth,
+                   max(metrics.size.snippetMinimumWidth,
+                       ceil(contentWidth) + metrics.spacing.md * 2 + metrics.spacing.sm * 2))
     }
 
     func update(snippets: [Snippet], selectedIndex: Int) {
@@ -1144,80 +1148,63 @@ private struct SnippetSuggestionListView: View {
     let onHoverSuggestion: (Int) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
                     ForEach(Array(snippets.enumerated()), id: \.element.id) { index, snippet in
                         suggestionRow(snippet, index: index)
                     }
-                    Spacer(minLength: 0)
                 }
-                .frame(width: metrics.size.snippetListWidth)
-                Rectangle().fill(Theme.Colors.separator).frame(width: Theme.Size.hairline)
-                preview
             }
-            Rectangle().fill(Theme.Colors.separator).frame(height: Theme.Size.hairline)
-            HStack(spacing: metrics.spacing.xl) {
-                Text("↩ insert")
-                Text("⇥ complete")
-                Spacer(minLength: 0)
-                Text("esc dismiss")
+            .scrollIndicators(.hidden)
+            .onChange(of: selectedIndex) {
+                revealSelection(using: proxy)
             }
-            .font(metrics.typography.keyCap)
-            .foregroundStyle(Theme.Colors.textSecondary)
-            .padding(.horizontal, metrics.spacing.md)
-            .frame(height: metrics.size.barButtonHeight)
+            .onChange(of: snippets.map(\.id)) {
+                revealSelection(using: proxy)
+            }
+            .onAppear { revealSelection(using: proxy) }
         }
         .padding(metrics.spacing.sm)
         .background(HUDGlassBackground(cornerRadius: metrics.radius.menuPanel))
-        .clipShape(RoundedRectangle(cornerRadius: metrics.radius.menuPanel))
+        .clipShape(RoundedRectangle(cornerRadius: metrics.radius.menuPanel, style: .continuous))
         .environment(\.metrics, metrics)
     }
 
-    private var preview: some View {
-        GeometryReader { geometry in
-            Text(snippets.indices.contains(selectedIndex) ? snippets[selectedIndex].content : "")
-                .font(metrics.typography.code)
-                .foregroundStyle(Theme.Colors.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(metrics.spacing.md)
-                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-                .clipped()
-                .mask(alignment: .bottom) {
-                    VStack(spacing: 0) {
-                        Rectangle()
-                        LinearGradient(colors: [.primary, .clear], startPoint: .top, endPoint: .bottom)
-                            .frame(height: metrics.spacing.xxl)
-                    }
-                }
-        }
-        .accessibilityLabel("Snippet preview")
+    private func revealSelection(using proxy: ScrollViewProxy) {
+        guard snippets.indices.contains(selectedIndex) else { return }
+        proxy.scrollTo(snippets[selectedIndex].id)
     }
 
     private func suggestionRow(_ snippet: Snippet, index: Int) -> some View {
-        VStack(alignment: .leading, spacing: metrics.spacing.xxs) {
+        HStack(spacing: metrics.spacing.md) {
             Text(">\(snippet.trigger)")
                 .font(metrics.typography.rowTitle.bold())
-                .foregroundStyle(Theme.Colors.textPrimary)
-            if !snippet.title.isEmpty {
-                Text(snippet.title)
-                    .font(metrics.typography.keyCap)
-                    .foregroundStyle(Theme.Colors.textSecondary)
-            }
+                .foregroundStyle(index == selectedIndex ? Theme.Colors.snippetSelectedText : Theme.Colors.textPrimary)
+                .layoutPriority(1)
+            Text(snippet.suggestionDetail)
+                .font(metrics.typography.rowTitle)
+                .foregroundStyle(index == selectedIndex ? Theme.Colors.snippetSelectedText : Theme.Colors.textSecondary)
         }
         .lineLimit(1)
         .padding(.horizontal, metrics.spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: metrics.size.launcherRowHeight)
-        .background(index == selectedIndex ? Theme.Colors.selection : .clear,
-                    in: RoundedRectangle(cornerRadius: metrics.radius.row))
+        .frame(height: metrics.size.snippetRowHeight)
+        .background(index == selectedIndex ? Theme.Colors.snippetSelection : .clear,
+                    in: RoundedRectangle(cornerRadius: metrics.radius.snippetSelection, style: .continuous))
         .contentShape(Rectangle())
         .onHover { if $0 { onHoverSuggestion(index) } }
         .onTapGesture { onSelectSnippet(snippet) }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { onSelectSnippet(snippet) }
+    }
+}
+
+private extension Snippet {
+    var suggestionDetail: String {
+        let text = title.isEmpty ? content : title
+        return text.prefix(200).split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
 

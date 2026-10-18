@@ -104,7 +104,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `custom-command-test` | `CustomCommands/Model/CustomCommand.swift`, `Service/ShellCommandRunner.swift` |
 | `uninstall-test` | all five pure files in `Uninstall/Model/` |
 | `quicklink-template-test` | Current clipboard and selection expansion, URL encoding, arguments, dates and UUIDs |
-| `snippet-expansion-test` | Event-tap consumption and ordering, long multiline insertion, trigger boundaries, title matching, primary-screen AX conversion and popup clamping |
+| `snippet-expansion-test` | Event-tap consumption and ordering, long multiline insertion, trigger boundaries, title matching, primary-screen AX conversion, popup clamping, and empty-query opening, ranking and keys |
 | `text-injection-test` | Private pasteboard restoration and ownership, Unicode delivery chunks, replacement confirmation and queue ordering |
 | `quicklink-test` | all of `Quicklinks/Model/` |
 | `quicklink-coordinator-test` | Quicklink opening and inline argument focus — missing selection, manual input, clipboard fallback and default-app overrides; no platform effects |

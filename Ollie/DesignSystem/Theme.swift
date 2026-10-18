@@ -30,6 +30,7 @@ enum Theme {
     }
 
     enum Radius {
+        static let snippetSelection: CGFloat = 4
         static let panel: CGFloat = 26
         static let row: CGFloat = 10
         /// Emoji tiles are roomier than list rows, so their corners take one larger step.
@@ -65,9 +66,9 @@ enum Theme {
     }
 
     enum Size {
-        static let snippetPopupWidth: CGFloat = 580
-        static let snippetListWidth: CGFloat = 230
-        static let snippetMinimumRows = 3
+        static let snippetMinimumWidth: CGFloat = 220
+        static let snippetMaximumWidth: CGFloat = 380
+        static let snippetRowHeight: CGFloat = 34
         static let snippetVisibleRows = 6
 
         static let detailListWidth: CGFloat = 290
@@ -449,6 +450,10 @@ enum Theme {
 
         /// The ramp's inverse: the scrim darkens the dark surface and lightens the light one.
         static let panelScrim = adaptive(dark: .srgbInk(0, alpha: 0.40), light: .srgbInk(1, alpha: 0.55))
+        static let snippetSelection = adaptive(
+            dark: .selectedContentBackgroundColor, light: .selectedContentBackgroundColor)
+        static let snippetSelectedText = adaptive(
+            dark: .alternateSelectedControlTextColor, light: .alternateSelectedControlTextColor)
         static let snippetFallbackDim = adaptive(
             dark: .srgbInk(0, alpha: 0.18), light: .srgbInk(0, alpha: 0.08))
         static let snippetFallbackFocus = adaptive(
