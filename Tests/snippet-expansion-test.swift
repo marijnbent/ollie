@@ -17,6 +17,7 @@ struct SnippetExpansionTests {
         defer { controller.stop() }
         let editor = NSTextView()
         var generated: [CGEvent] = []
+        var visibleBeforePrefixInsertion = false
 
         func deliver(_ event: CGEvent) {
             guard event.type == .keyDown, let key = NSEvent(cgEvent: event) else { return }
@@ -37,6 +38,11 @@ struct SnippetExpansionTests {
             let forwarded = controller.handle(type: .keyDown, event: event) { replacement in
                 generated.append(replacement)
                 deliver(replacement)
+            }
+            if text == ">" {
+                visibleBeforePrefixInsertion = NSApp.windows.contains {
+                    $0.identifier?.rawValue == "snippet-suggestions" && $0.isVisible
+                }
             }
             if let forwarded { deliver(forwarded.takeUnretainedValue()) }
             return forwarded == nil
@@ -144,9 +150,18 @@ struct SnippetExpansionTests {
             NSApp.windows.first { $0.identifier?.rawValue == "snippet-suggestions" }
         }
 
+        func waitForPopup() {
+            let deadline = Date().addingTimeInterval(1)
+            while popup()?.isVisible != true, Date() < deadline {
+                RunLoop.main.run(until: Date().addingTimeInterval(0.005))
+            }
+        }
+
         type(" ")
         type(">")
-        check("bare prefix opens suggestions immediately", popup()?.isVisible == true)
+        check("prefix insertion precedes the first display", !visibleBeforePrefixInsertion)
+        waitForPopup()
+        check("bare prefix opens without AX notifications", popup()?.isVisible == true)
         let ranked = store.matches(for: "")
         check("popup hugs fewer than six rows", popup()?.frame.height ==
             CGFloat(ranked.count) * Theme.Size.snippetRowHeight + Theme.Spacing.sm * 2)
@@ -176,7 +191,8 @@ struct SnippetExpansionTests {
         type(" ")
         type(">")
         check("Escape dismisses the empty-query list", type("", keyCode: 53))
-        check("Escape hides the popup", popup()?.isVisible == false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        check("Escape cancels the pending display", popup()?.isVisible == false)
         check("Return after Escape passes through", !type("\r", keyCode: 36))
         type(" ")
         type(">")
@@ -189,6 +205,7 @@ struct SnippetExpansionTests {
         }
         type(" ")
         type(">")
+        waitForPopup()
         let allRanked = store.matches(for: "")
         check("popup height caps at six dense rows", popup()?.frame.height ==
             CGFloat(Theme.Size.snippetVisibleRows) * Theme.Size.snippetRowHeight + Theme.Spacing.sm * 2)
@@ -201,10 +218,17 @@ struct SnippetExpansionTests {
         for snippet in store.snippets where snippet.trigger != "p" { store.deleteSnippet(id: snippet.id) }
         type(" ")
         type(">")
+        waitForPopup()
         check("one suggestion occupies exactly one row", popup()?.frame.height ==
             Theme.Size.snippetRowHeight + Theme.Spacing.sm * 2)
         check("short content hugs the minimum width", popup()?.frame.width == Theme.Size.snippetMinimumWidth)
         controller.stop()
+
+        type(" ")
+        type(">")
+        controller.stop()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        check("stop cancels the pending display", popup()?.isVisible == false)
 
         let result = failures == 0 ? "PASS: snippet event ordering, insertion, boundaries, placement and empty-query suggestions"
             : "FAIL: \(failures) snippet checks"

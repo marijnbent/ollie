@@ -25,6 +25,8 @@ final class SnippetExpansionController {
     private var matches: [Snippet] = []
     private var selectedIndex = 0
     private var hasNavigatedSuggestions = false
+    private var openingTask: Task<Void, Never>?
+    private var openingCaretRect: CGRect?
     private var activationObserver: NotificationToken?
     private var sessionAnchorRect: CGRect?
     private var sessionAnchorStrategy: AnchorStrategy?
@@ -152,24 +154,24 @@ final class SnippetExpansionController {
             cancelSession()
             return true
         case 125: // Down
-            guard suggestionWindowController.isVisible, !matches.isEmpty else { return false }
+            guard hasSuggestions else { return false }
             hasNavigatedSuggestions = true
             selectedIndex = min(selectedIndex + 1, matches.count - 1)
             refreshSuggestions()
             return true
         case 126: // Up
-            guard suggestionWindowController.isVisible, !matches.isEmpty else { return false }
+            guard hasSuggestions else { return false }
             hasNavigatedSuggestions = true
             selectedIndex = max(selectedIndex - 1, 0)
             refreshSuggestions()
             return true
         case 36: // Return
-            guard suggestionWindowController.isVisible,
+            guard hasSuggestions,
                   let snippet = selectedSnippet,
                   shouldCommitSnippetSelectionOnReturn else { return false }
             return expand(snippet, postEvent: postEvent)
         case 48: // Tab
-            guard suggestionWindowController.isVisible, let snippet = selectedSnippet else { return false }
+            guard hasSuggestions, let snippet = selectedSnippet else { return false }
             return expand(snippet, postEvent: postEvent)
         case 51: // Backspace
             guard let activeQuery else { return false }
@@ -268,6 +270,12 @@ final class SnippetExpansionController {
         }
 
         let anchorResolution = resolveSessionAnchor()
+        if openingTask != nil {
+            guard anchorResolution.strategy.isCaret, anchorResolution.rect != openingCaretRect else { return }
+            openingTask?.cancel()
+            openingTask = nil
+            openingCaretRect = nil
+        }
         if anchorResolution.strategy != .screenCenter && anchorResolution.strategy != .pointer
             && anchorResolution.strategy != .cachedPosition {
             sessionAnchorRect = anchorResolution.rect
@@ -284,6 +292,9 @@ final class SnippetExpansionController {
     }
 
     private func cancelSession() {
+        openingTask?.cancel()
+        openingTask = nil
+        openingCaretRect = nil
         activeQuery = nil
         matches = []
         selectedIndex = 0
@@ -299,6 +310,10 @@ final class SnippetExpansionController {
         activeQuery != nil
     }
 
+    private var hasSuggestions: Bool {
+        !matches.isEmpty && (openingTask != nil || suggestionWindowController.isVisible)
+    }
+
     private var selectedSnippet: Snippet? {
         guard matches.indices.contains(selectedIndex) else { return nil }
         return matches[selectedIndex]
@@ -312,13 +327,27 @@ final class SnippetExpansionController {
 
     private func startSession() {
         activeQuery = ""
-        matches = []
+        matches = store.matches(for: "")
         selectedIndex = 0
         hasNavigatedSuggestions = false
         sessionAnchorRect = nil
         sessionAnchorStrategy = nil
         lastAnchorLogKey = nil
-        refreshSuggestions()
+        ensureObservationTargetCurrent()
+        let anchor = resolveSessionAnchor()
+        openingCaretRect = anchor.strategy.isCaret ? anchor.rect : nil
+        openingTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(32))
+            } catch {
+                return
+            }
+            guard let self else { return }
+            openingTask = nil
+            openingCaretRect = nil
+            refreshSuggestions()
+        }
+        refreshSuggestionsAsync()
     }
 
     @discardableResult
@@ -476,6 +505,7 @@ final class SnippetExpansionController {
     }
 
     private func focusedElement() -> AXUIElement? {
+        guard frontmostApplication() != nil else { return nil }
         let systemWideElement = AXUIElementCreateSystemWide()
         var focusedElementRef: CFTypeRef?
 

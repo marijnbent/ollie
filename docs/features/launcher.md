@@ -798,7 +798,9 @@ the rest of the menu already has ([palette.md](palette.md)). Only `LauncherList`
 Outside Ollie, `>` starts an inline snippet query at the start of a line or after whitespace.
 The boundary comes from the focused AX value and selection when readable, otherwise from the last
 physical keystroke. Operators and tags such as `->`, `=>`, `a>b` and `<div>` do not start a query.
-Typing `>` immediately opens all snippets ranked by usage count, then most recent use. Typed queries
+Typing `>` prepares all snippets ranked by usage count, then most recent use. The picker first opens
+after the caret advances past `>`, with a 32 ms fallback when AX does not report the change.
+Tab and arrow selection remain available while opening; Escape cancels the pending display. Typed queries
 rank trigger matches ahead of title and content matches. The compact single-column HUD-glass panel
 hugs its content between `snippetMinimumWidth` (220) and `snippetMaximumWidth` (380), scaled by
 Interface Size. Each `snippetRowHeight` (34) row shows a bold trigger followed by its title or a
