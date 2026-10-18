@@ -80,6 +80,8 @@ struct InterfaceSizeTests {
         expect(m.radius.keyCap, Theme.Radius.keyCap, "radius.keyCap")
         expect(m.radius.tooltip, Theme.Radius.tooltip, "radius.tooltip")
 
+        expect(m.size.snippetPopupWidth, Theme.Size.snippetPopupWidth, "size.snippetPopupWidth")
+        expect(m.size.snippetListWidth, Theme.Size.snippetListWidth, "size.snippetListWidth")
         expect(m.size.panelWidth, Theme.Size.panelWidth, "size.panelWidth")
         expect(m.size.panelHeight, Theme.Size.panelHeight, "size.panelHeight")
         expect(m.size.headerHeight, Theme.Size.headerHeight, "size.headerHeight")

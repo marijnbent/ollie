@@ -12,6 +12,16 @@ enum AccessibilityReplacement: Equatable {
 
 /// The two judgements a replacement makes, kept pure so the harness can drive both tiers.
 enum TextReplacementPolicy {
+    static func triggerRange(_ trigger: String, in value: String, selectedRange: NSRange) -> NSRange? {
+        guard selectedRange.length == 0, selectedRange.location >= trigger.utf16.count,
+              Range(selectedRange, in: value) != nil else { return nil }
+        let replacementRange = NSRange(
+            location: selectedRange.location - trigger.utf16.count, length: trigger.utf16.count)
+        guard let range = Range(replacementRange, in: value),
+              String(value[range]).caseInsensitiveCompare(trigger) == .orderedSame else { return nil }
+        return replacementRange
+    }
+
     /// Chromium answers `.success` and applies nothing, so the value has to read back as we wrote it.
     static func confirmsReplacement(
         originalValue: String,
@@ -190,7 +200,7 @@ final class TextInjector {
                 promptForInteractiveAccessibility: true)
         else { return }
 
-        let accessibilityReplacement = await replaceUsingAccessibility(
+        let accessibilityReplacement = Self.replaceUsingAccessibility(
             text,
             targetApp: targetApp)
         if accessibilityReplacement == .delivered {
@@ -249,7 +259,7 @@ final class TextInjector {
         _ text: String,
         targetApp: NSRunningApplication?
     ) async -> Bool {
-        guard let insertionEvents = makeUnicodeEvents(text),
+        guard let insertionEvents = Self.makeUnicodeEvents(text),
             deliveryIsAllowed(
                 targetApp: targetApp,
                 promptForInteractiveAccessibility: false),
@@ -360,19 +370,20 @@ final class TextInjector {
     }
 
     /// Rule 1: a renderer surface answers about its own model, so it is never written to over AX.
-    private func replaceUsingAccessibility(
+    private static func replaceUsingAccessibility(
         _ text: String,
-        targetApp: NSRunningApplication?
-    ) async -> AccessibilityReplacement {
+        targetApp: NSRunningApplication?,
+        replacingSuffix: String? = nil
+    ) -> AccessibilityReplacement {
         guard let targetApp else { return .unavailable }
-        let state = inspectAccessibilityTarget(
-            in: targetApp)
+        let state = Self.inspectAccessibilityTarget(
+            in: targetApp, replacingSuffix: replacingSuffix)
         guard case .ready(let target) = state else {
             if case .rejected = state { return .rejected }
             return .unavailable
         }
 
-        guard setSelectedRange(target.replacementRange, in: target.element) else {
+        guard Self.setSelectedRange(target.replacementRange, in: target.element) else {
             return .unavailable
         }
         guard
@@ -381,11 +392,11 @@ final class TextInjector {
                 kAXSelectedTextAttribute as CFString,
                 text as CFString) == .success
         else {
-            _ = setSelectedRange(target.originalRange, in: target.element)
+            _ = Self.setSelectedRange(target.originalRange, in: target.element)
             return .unavailable
         }
 
-        let observed = stringValue(in: target.element)
+        let observed = Self.stringValue(in: target.element)
         guard
             TextReplacementPolicy.confirmsReplacement(
                 originalValue: target.value,
@@ -393,38 +404,45 @@ final class TextInjector {
                 insertedText: text,
                 observedValue: observed)
         else {
-            _ = setSelectedRange(target.originalRange, in: target.element)
+            _ = Self.setSelectedRange(target.originalRange, in: target.element)
             // An untouched value is a tier that did nothing; anything else moved text we cannot name.
             return observed == target.value ? .unavailable : .rejected
         }
 
-        _ = setSelectedRange(
+        _ = Self.setSelectedRange(
             NSRange(
                 location: target.replacementRange.location + text.utf16.count, length: 0),
             in: target.element)
         return .delivered
     }
 
-    private func inspectAccessibilityTarget(
-        in targetApp: NSRunningApplication
+    private static func inspectAccessibilityTarget(
+        in targetApp: NSRunningApplication,
+        replacingSuffix: String? = nil
     ) -> AccessibilityTargetState {
         guard let element = AccessibilityText.focusedElement(in: targetApp),
-            !usesTextMarkerSelection(element),
-            isAttributeSettable(kAXSelectedTextRangeAttribute, in: element),
-            isAttributeSettable(kAXSelectedTextAttribute, in: element),
-            let value = stringValue(in: element),
-            let originalRange = selectedRange(in: element)
+            !Self.usesTextMarkerSelection(element),
+            Self.isAttributeSettable(kAXSelectedTextRangeAttribute, in: element),
+            Self.isAttributeSettable(kAXSelectedTextAttribute, in: element),
+            let value = Self.stringValue(in: element),
+            let originalRange = Self.selectedRange(in: element)
         else { return .unavailable }
 
         guard Range(originalRange, in: value) != nil else { return .unavailable }
+        var replacementRange = originalRange
+        if let replacingSuffix {
+            guard let range = TextReplacementPolicy.triggerRange(
+                replacingSuffix, in: value, selectedRange: originalRange) else { return .rejected }
+            replacementRange = range
+        }
         return .ready(
             AccessibilityTarget(
                 element: element, value: value, originalRange: originalRange,
-                replacementRange: originalRange))
+                replacementRange: replacementRange))
     }
 
     /// Web content and Monaco expose selection only as markers; their `AXValue` trails or is empty.
-    private func usesTextMarkerSelection(_ element: AXUIElement) -> Bool {
+    private static func usesTextMarkerSelection(_ element: AXUIElement) -> Bool {
         var value: CFTypeRef?
         guard
             AXUIElementCopyAttributeValue(
@@ -472,14 +490,14 @@ final class TextInjector {
     ) -> AccessibilityTextState? {
         guard let targetApp,
             let element = AccessibilityText.focusedElement(in: targetApp),
-            !usesTextMarkerSelection(element),
-            let value = stringValue(in: element),
-            let selectedRange = selectedRange(in: element)
+            !Self.usesTextMarkerSelection(element),
+            let value = Self.stringValue(in: element),
+            let selectedRange = Self.selectedRange(in: element)
         else { return nil }
         return AccessibilityTextState(value: value, selectedRange: selectedRange)
     }
 
-    private func stringValue(in element: AXUIElement) -> String? {
+    private static func stringValue(in element: AXUIElement) -> String? {
         var value: CFTypeRef?
         guard
             AXUIElementCopyAttributeValue(
@@ -490,7 +508,7 @@ final class TextInjector {
         return value as? String
     }
 
-    private func selectedRange(in element: AXUIElement) -> NSRange? {
+    private static func selectedRange(in element: AXUIElement) -> NSRange? {
         var value: CFTypeRef?
         guard
             AXUIElementCopyAttributeValue(
@@ -508,7 +526,7 @@ final class TextInjector {
         return NSRange(location: range.location, length: range.length)
     }
 
-    private func setSelectedRange(_ range: NSRange, in element: AXUIElement) -> Bool {
+    private static func setSelectedRange(_ range: NSRange, in element: AXUIElement) -> Bool {
         var cfRange = CFRange(location: range.location, length: range.length)
         guard let value = AXValueCreate(.cfRange, &cfRange) else { return false }
         return AXUIElementSetAttributeValue(
@@ -517,7 +535,7 @@ final class TextInjector {
             value) == .success
     }
 
-    private func isAttributeSettable(_ attribute: String, in element: AXUIElement) -> Bool {
+    private static func isAttributeSettable(_ attribute: String, in element: AXUIElement) -> Bool {
         var settable = DarwinBoolean(false)
         guard
             AXUIElementIsAttributeSettable(
@@ -546,17 +564,38 @@ final class TextInjector {
         return AccessibilityText.selection(in: targetApp)
     }
 
-    private func makeUnicodeEvents(_ text: String) -> [[CGEvent]]? {
+    static func replaceInlineTriggerUsingAccessibility(
+        _ trigger: String, with text: String, in targetApp: NSRunningApplication?
+    ) -> AccessibilityReplacement {
+        replaceUsingAccessibility(text, targetApp: targetApp, replacingSuffix: trigger)
+    }
+
+    static func inlineReplacementEvents(deleting characterCount: Int, inserting text: String) -> [CGEvent]? {
+        guard let insertion = makeUnicodeEvents(text) else { return nil }
+        var events: [CGEvent] = []
+        for _ in 0..<characterCount {
+            guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 51, keyDown: true),
+                  let up = CGEvent(keyboardEventSource: nil, virtualKey: 51, keyDown: false) else { return nil }
+            for event in [down, up] {
+                event.flags = []
+                tag(event)
+                events.append(event)
+            }
+        }
+        return events + insertion.flatMap { $0 }
+    }
+
+    private static func makeUnicodeEvents(_ text: String) -> [[CGEvent]]? {
         guard !text.isEmpty else { return [] }
         var groups: [[CGEvent]] = []
         for chunk in UnicodeTypingChunk.split(text) {
-            guard let pair = makeUnicodeEvent(chunk) else { return nil }
+            guard let pair = Self.makeUnicodeEvent(chunk) else { return nil }
             groups.append(pair)
         }
         return groups
     }
 
-    private func makeUnicodeEvent(_ chunk: [UniChar]) -> [CGEvent]? {
+    private static func makeUnicodeEvent(_ chunk: [UniChar]) -> [CGEvent]? {
         let source = CGEventSource(stateID: .combinedSessionState)
         var characters = chunk
         guard
@@ -572,8 +611,8 @@ final class TextInjector {
         // The source inherits held modifiers, and a hotkey's are still down while this types.
         down.flags = []
         up.flags = []
-        tag(down)
-        tag(up)
+        Self.tag(down)
+        Self.tag(up)
         down.keyboardSetUnicodeString(
             stringLength: characters.count,
             unicodeString: &characters)
@@ -583,7 +622,7 @@ final class TextInjector {
         return [down, up]
     }
 
-    private func tag(_ event: CGEvent) {
+    private static func tag(_ event: CGEvent) {
         event.setIntegerValueField(
             .eventSourceUserData,
             value: Paster.ollieEventTag)
@@ -621,6 +660,14 @@ enum UnicodeTypingChunk {
         var current: [UniChar] = []
         current.reserveCapacity(maxUTF16Units)
         for scalar in text.unicodeScalars {
+            if scalar == "\n" || scalar == "\r" || scalar == "\t" {
+                if !current.isEmpty { chunks.append(current) }
+                current = []
+                var control: [UniChar] = []
+                UTF16.encode(scalar) { control.append($0) }
+                chunks.append(control)
+                continue
+            }
             if current.count + UTF16.width(scalar) > maxUTF16Units {
                 chunks.append(current)
                 current = []

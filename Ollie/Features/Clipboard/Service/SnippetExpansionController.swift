@@ -2,22 +2,14 @@ import Cocoa
 import SwiftUI
 import ApplicationServices
 
-enum SnippetExpansionPolicy {
-    static func shouldAutoExpand(_ exactMatch: Snippet, among matches: [Snippet]) -> Bool {
-        !matches.contains { snippet in
-            snippet.id != exactMatch.id && snippet.trigger.hasPrefix(exactMatch.trigger)
-        }
-    }
-}
-
 @MainActor
 final class SnippetExpansionController {
-    private static let maximumVisibleSuggestions = 3
-
     private let generatedEventMarker: Int64 = Paster.ollieEventTag
+    private let metrics: () -> InterfaceMetrics
     private let store: SnippetStore
     private let frontmostApplication: () -> NSRunningApplication?
     private lazy var suggestionWindowController = SnippetSuggestionWindowController(
+        metrics: metrics,
         onSelectSnippet: { [weak self] snippet in
             self?.expand(snippet)
         },
@@ -29,10 +21,11 @@ final class SnippetExpansionController {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var activeQuery: String?
+    private var previousCharacter: Character?
     private var matches: [Snippet] = []
     private var selectedIndex = 0
     private var hasNavigatedSuggestions = false
-    private var activationObserver: NSObjectProtocol?
+    private var activationObserver: NotificationToken?
     private var sessionAnchorRect: CGRect?
     private var sessionAnchorStrategy: AnchorStrategy?
     private var axObserver: AXObserver?
@@ -47,9 +40,11 @@ final class SnippetExpansionController {
 
     init(
         store: SnippetStore,
+        metrics: @escaping () -> InterfaceMetrics = { .standard },
         frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }
     ) {
         self.store = store
+        self.metrics = metrics
         self.frontmostApplication = frontmostApplication
     }
 
@@ -74,7 +69,7 @@ final class SnippetExpansionController {
             },
             userInfo: UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         ) else {
-            print("[clippie] Failed to create snippet event tap")
+            Diagnostics(category: "snippets").error("Failed to create snippet event tap")
             return
         }
 
@@ -88,24 +83,24 @@ final class SnippetExpansionController {
 
         CGEvent.tapEnable(tap: tap, enable: true)
 
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+        let center = NSWorkspace.shared.notificationCenter
+        activationObserver = NotificationToken(center.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.cancelSession()
+                self?.previousCharacter = nil
             }
-        }
+        }, center: center)
     }
 
     func stop() {
         cancelSession()
 
-        if let activationObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
-            self.activationObserver = nil
-        }
+        activationObserver = nil
+        previousCharacter = nil
 
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
@@ -132,6 +127,12 @@ final class SnippetExpansionController {
 
         guard type == .keyDown, let nsEvent = NSEvent(cgEvent: event) else {
             return Unmanaged.passUnretained(event)
+        }
+
+        defer {
+            let modifiers = nsEvent.modifierFlags.intersection([.command, .control, .option])
+            previousCharacter = modifiers.isEmpty ? nsEvent.characters?.last : nil
+            if [51, 123, 124, 125, 126].contains(nsEvent.keyCode) { previousCharacter = nil }
         }
 
         if shouldConsumeControlKey(nsEvent, postEvent: postEvent) {
@@ -197,7 +198,17 @@ final class SnippetExpansionController {
         }
 
         if characters == ">" && disallowedModifiers.isEmpty {
-            startSession()
+            let element = focusedElement()
+            let value = element.flatMap { stringAttribute(kAXValueAttribute as CFString, for: $0) }
+            let range = element.flatMap { selectedTextRange(for: $0) }.map {
+                NSRange(location: $0.location, length: $0.length)
+            }
+            cancelSession()
+            if SnippetExpansionPolicy.canStartSession(
+                value: value, selectedRange: range, previousCharacter: previousCharacter
+            ) {
+                startSession()
+            }
             return false
         }
 
@@ -253,9 +264,9 @@ final class SnippetExpansionController {
 
         ensureObservationTargetCurrent()
 
-        let allMatches = store.expansionMatches(for: activeQuery)
+        let allMatches = store.matches(for: activeQuery)
 
-        matches = Array(allMatches.prefix(Self.maximumVisibleSuggestions))
+        matches = Array(allMatches.prefix(Theme.Size.snippetVisibleRows))
         if selectedIndex >= matches.count {
             selectedIndex = max(0, matches.count - 1)
         }
@@ -266,7 +277,8 @@ final class SnippetExpansionController {
         }
 
         let anchorResolution = resolveSessionAnchor()
-        if anchorResolution.strategy.shouldCache {
+        if anchorResolution.strategy != .screenCenter && anchorResolution.strategy != .pointer
+            && anchorResolution.strategy != .cachedPosition {
             sessionAnchorRect = anchorResolution.rect
             sessionAnchorStrategy = anchorResolution.strategy
         }
@@ -325,34 +337,24 @@ final class SnippetExpansionController {
         pendingCharacterCount: Int = 0,
         postEvent: (CGEvent) -> Void = { $0.post(tap: .cgAnnotatedSessionEventTap) }
     ) -> Bool {
-        let deleteCount = (activeQuery?.count ?? 0) + 1 - pendingCharacterCount
-        guard let events = replacementEvents(deleting: deleteCount, inserting: snippet.content) else { return false }
+        let trigger = ">" + (activeQuery ?? "")
+        let forwardedTrigger = String(trigger.dropLast(pendingCharacterCount))
+        guard let events = TextInjector.inlineReplacementEvents(
+            deleting: forwardedTrigger.count, inserting: snippet.content
+        ) else { return false }
+        let replacement = TextInjector.replaceInlineTriggerUsingAccessibility(
+            forwardedTrigger, with: snippet.content, in: frontmostApplication())
         cancelSession()
+        if replacement == .rejected {
+            Diagnostics(category: "snippets").warning("Snippet replacement target changed")
+            return true
+        }
+        if replacement.fallsBackToEvents {
+            for event in events { postEvent(event) }
+        }
         store.recordUsage(for: snippet.id)
-        for event in events { postEvent(event) }
         playInsertionSound()
         return true
-    }
-
-    private func replacementEvents(deleting characterCount: Int, inserting text: String) -> [CGEvent]? {
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return nil }
-        var events: [CGEvent] = []
-        for _ in 0..<characterCount {
-            guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true),
-                  let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false) else { return nil }
-            events.append(contentsOf: [keyDown, keyUp])
-        }
-        let utf16 = Array(text.utf16)
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else { return nil }
-        keyDown.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        keyUp.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        events.append(contentsOf: [keyDown, keyUp])
-        for event in events {
-            event.flags = []
-            event.setIntegerValueField(.eventSourceUserData, value: generatedEventMarker)
-        }
-        return events
     }
 
     private func caretRect(for focusedElement: AXUIElement) -> CGRect? {
@@ -366,9 +368,9 @@ final class SnippetExpansionController {
     }
 
     private func focusedElementRect(for focusedElement: AXUIElement) -> CGRect? {
-        guard let bounds = accessibilityFrame(for: focusedElement) else {
-            return nil
-        }
+        let role = stringAttribute(kAXRoleAttribute as CFString, for: focusedElement)
+        guard role == kAXTextAreaRole || role == kAXTextFieldRole || role == kAXComboBoxRole,
+              let bounds = accessibilityFrame(for: focusedElement) else { return nil }
 
         return resolvedElementRect(fromAccessibilityBounds: bounds)
     }
@@ -417,26 +419,58 @@ final class SnippetExpansionController {
         let focusedRole = focusedElement.flatMap { stringAttribute(kAXRoleAttribute as CFString, for: $0) }
         let focusedSubrole = focusedElement.flatMap { stringAttribute(kAXSubroleAttribute as CFString, for: $0) }
 
-        if let focusedElement,
-           let caretRect = caretRect(for: focusedElement) {
-            return AnchorResolution(
-                rect: caretRect,
-                strategy: .caretBounds,
-                bundleIdentifier: bundleIdentifier,
-                processID: processID,
-                focusedRole: focusedRole,
-                focusedSubrole: focusedSubrole
-            )
+        var rect: CGRect?
+        var strategy = AnchorStrategy.screenCenter
+        if let focusedElement {
+            if let caret = caretRect(for: focusedElement) {
+                rect = caret
+                strategy = .caretBounds
+            } else if let caret = textMarkerCaretRect(for: focusedElement) {
+                rect = caret
+                strategy = .textMarkerCaret
+            }
         }
-
+        if rect == nil, let focusedElement, let elementRect = focusedElementRect(for: focusedElement) {
+            rect = CGRect(x: elementRect.minX, y: elementRect.minY, width: 1, height: 1)
+            strategy = .textElement
+        }
+        if rect == nil, let windowRect = focusedWindowRect() {
+            rect = focusedWindowAnchorRect(from: windowRect)
+            strategy = .focusedWindow
+        }
+        if rect == nil, let sessionAnchorRect {
+            rect = sessionAnchorRect
+            strategy = .cachedPosition
+        }
+        if rect == nil, NSScreen.screens.contains(where: { $0.frame.contains(NSEvent.mouseLocation) }) {
+            rect = CGRect(origin: NSEvent.mouseLocation, size: CGSize(width: 1, height: 1))
+            strategy = .pointer
+        }
         return AnchorResolution(
-            rect: fallbackAnchorRect(),
-            strategy: .screenCenter,
+            rect: rect ?? fallbackAnchorRect(),
+            strategy: strategy,
             bundleIdentifier: bundleIdentifier,
             processID: processID,
             focusedRole: focusedRole,
             focusedSubrole: focusedSubrole
         )
+    }
+
+    private func textMarkerCaretRect(for element: AXUIElement) -> CGRect? {
+        var selection: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element, kAXSelectedTextMarkerRangeAttribute as CFString, &selection) == .success,
+              let selection, CFGetTypeID(selection) == AXTextMarkerRangeGetTypeID() else { return nil }
+        let range = unsafeDowncast(selection, to: AXTextMarkerRange.self)
+        let end = AXTextMarkerRangeCopyEndMarker(range)
+        let caret = AXTextMarkerRangeCreate(kCFAllocatorDefault, end, end)
+        var value: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(
+            element, "AXBoundsForTextMarkerRange" as CFString, caret, &value) == .success,
+              let value, CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+        var bounds = CGRect.zero
+        guard AXValueGetValue(unsafeDowncast(value, to: AXValue.self), .cgRect, &bounds) else { return nil }
+        return resolvedCaretRect(fromAccessibilityBounds: bounds, constrainedTo: accessibilityFrame(for: element))
     }
 
     private func exactMatch(for query: String) -> Snippet? {
@@ -567,7 +601,7 @@ final class SnippetExpansionController {
     }
 
     private func resolvedCaretRect(fromAccessibilityBounds bounds: CGRect, constrainedTo accessibilityElementBounds: CGRect?) -> CGRect? {
-        guard isFinite(bounds) else {
+        guard isFinite(bounds), bounds.width >= 0, bounds.height > 0, bounds.height <= 200 else {
             return nil
         }
 
@@ -581,10 +615,6 @@ final class SnippetExpansionController {
 
         if convertedBounds.width <= 0 {
             convertedBounds.size.width = 1
-        }
-
-        if convertedBounds.height <= 0 {
-            convertedBounds.size.height = 18
         }
 
         let desktopFrame = NSScreen.screens.reduce(into: CGRect.null) { partialResult, screen in
@@ -641,16 +671,9 @@ final class SnippetExpansionController {
     }
 
     private func appKitRect(fromAccessibilityRect accessibilityRect: CGRect) -> CGRect? {
-        let desktopFrame = NSScreen.screens.reduce(into: CGRect.null) { partialResult, screen in
-            partialResult = partialResult.union(screen.frame)
-        }
-        guard !desktopFrame.isNull else {
-            return nil
-        }
-
-        var convertedRect = accessibilityRect
-        convertedRect.origin.y = desktopFrame.maxY - accessibilityRect.maxY
-        return convertedRect
+        guard let primary = NSScreen.screens.first else { return nil }
+        return SnippetExpansionPolicy.appKitRect(
+            from: accessibilityRect, primaryScreenHeight: primary.frame.height)
     }
 
     private func ensureObservationTargetCurrent(force: Bool = false) {
@@ -738,14 +761,16 @@ final class SnippetExpansionController {
             guard let self else { return }
             guard isSessionActive else { return }
 
-            sessionAnchorRect = nil
-
             switch notification {
             case kAXFocusedUIElementChangedNotification:
+                sessionAnchorRect = nil
+                sessionAnchorStrategy = nil
                 unregisterFocusedElementNotifications()
                 refreshObservedElements()
                 registerFocusedElementNotifications()
             case kAXFocusedWindowChangedNotification, kAXMainWindowChangedNotification:
+                sessionAnchorRect = nil
+                sessionAnchorStrategy = nil
                 unregisterFocusedWindowNotifications()
                 unregisterFocusedElementNotifications()
                 refreshObservedElements()
@@ -1009,16 +1034,14 @@ final class SnippetExpansionController {
 
 private enum AnchorStrategy: String {
     case caretBounds
+    case textMarkerCaret
+    case textElement
+    case focusedWindow
+    case cachedPosition
+    case pointer
     case screenCenter
 
-    var shouldCache: Bool {
-        switch self {
-        case .caretBounds:
-            return true
-        case .screenCenter:
-            return false
-        }
-    }
+    var isCaret: Bool { self == .caretBounds || self == .textMarkerCaret }
 }
 
 private struct AnchorResolution {
@@ -1038,185 +1061,244 @@ private enum AccessibilityActivationMode: String {
 @MainActor
 private final class SnippetSuggestionWindowController: NSWindowController {
     private let hostingView: NSHostingView<SnippetSuggestionListView>
+    private let metrics: () -> InterfaceMetrics
     private let onSelectSnippet: (Snippet) -> Void
     private let onHoverSuggestion: (Int) -> Void
+    private let overlay = SnippetBackdropController()
 
     init(
+        metrics: @escaping () -> InterfaceMetrics,
         onSelectSnippet: @escaping (Snippet) -> Void,
         onHoverSuggestion: @escaping (Int) -> Void
     ) {
+        self.metrics = metrics
         self.onSelectSnippet = onSelectSnippet
         self.onHoverSuggestion = onHoverSuggestion
-        hostingView = NSHostingView(
-            rootView: SnippetSuggestionListView(
-                snippets: [],
-                selectedIndex: 0,
-                onSelectSnippet: onSelectSnippet,
-                onHoverSuggestion: onHoverSuggestion
-            )
-        )
-
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 280, height: 80),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-
+        hostingView = NSHostingView(rootView: SnippetSuggestionListView(
+            snippets: [], selectedIndex: 0, metrics: metrics(),
+            onSelectSnippet: onSelectSnippet, onHoverSuggestion: onHoverSuggestion))
+        hostingView.sizingOptions = []
+        let panel = SnippetPanel(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .floating
         panel.isFloatingPanel = true
-        panel.collectionBehavior = [.transient, .ignoresCycle]
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.hidesOnDeactivate = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isOpaque = false
         panel.contentView = hostingView
-
         super.init(window: panel)
     }
 
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    var isVisible: Bool {
-        window?.isVisible == true
-    }
+    var isVisible: Bool { window?.isVisible == true }
 
     func show(snippets: [Snippet], selectedIndex: Int, anchorRect: CGRect, anchorStrategy: AnchorStrategy) {
         update(snippets: snippets, selectedIndex: selectedIndex)
-
-        let width: CGFloat = 310
-        let rowHeight: CGFloat = 44
-        let chromeHeight: CGFloat = 10
-        let height = CGFloat(snippets.count) * rowHeight + chromeHeight
-        let contentRect = NSRect(x: 0, y: 0, width: width, height: height)
-
-        window?.setContentSize(contentRect.size)
-
-        let preferredOrigin = preferredOrigin(
-            for: anchorRect,
-            popupSize: contentRect.size,
-            anchorStrategy: anchorStrategy
-        )
-        window?.setFrameOrigin(preferredOrigin)
+        let metrics = metrics()
+        let screen = NSScreen.screens.first { $0.frame.contains(CGPoint(x: anchorRect.midX, y: anchorRect.midY)) }
+            ?? NSScreen.main ?? NSScreen.screens.first
+        guard let screen else { return }
+        let visibleFrame = screen.visibleFrame.insetBy(dx: metrics.spacing.md, dy: metrics.spacing.md)
+        let size = CGSize(
+            width: min(metrics.size.snippetPopupWidth, visibleFrame.width),
+            height: min(CGFloat(max(Theme.Size.snippetMinimumRows, snippets.count)) * metrics.size.launcherRowHeight
+                + metrics.size.barButtonHeight + metrics.spacing.sm * 2, visibleFrame.height))
+        let origin = SnippetExpansionPolicy.popupOrigin(
+            anchor: anchorRect, size: size, visibleFrame: visibleFrame,
+            centered: anchorStrategy == .screenCenter, gap: metrics.spacing.md)
+        window?.setFrame(CGRect(origin: origin, size: size), display: true)
+        if anchorStrategy.isCaret {
+            overlay.hide()
+        } else {
+            overlay.show(on: screen, popupFrame: CGRect(origin: origin, size: size))
+        }
         window?.orderFrontRegardless()
     }
 
     func update(snippets: [Snippet], selectedIndex: Int) {
         hostingView.rootView = SnippetSuggestionListView(
-            snippets: snippets,
-            selectedIndex: selectedIndex,
-            onSelectSnippet: onSelectSnippet,
-            onHoverSuggestion: onHoverSuggestion
-        )
+            snippets: snippets, selectedIndex: selectedIndex, metrics: metrics(),
+            onSelectSnippet: onSelectSnippet, onHoverSuggestion: onHoverSuggestion)
     }
 
     func hide() {
         window?.orderOut(nil)
+        overlay.hide()
     }
+}
 
-    private func preferredOrigin(
-        for anchorRect: CGRect,
-        popupSize: CGSize,
-        anchorStrategy: AnchorStrategy
-    ) -> CGPoint {
-        let anchorPoint = CGPoint(x: anchorRect.midX, y: anchorRect.midY)
-        let screen = NSScreen.screens.first(where: {
-            $0.frame.contains(anchorPoint) || $0.visibleFrame.intersects(anchorRect)
-        }) ?? NSScreen.main
-        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-
-        if anchorStrategy == .screenCenter {
-            let x = min(
-                max(visibleFrame.midX - (popupSize.width / 2), visibleFrame.minX + 8),
-                visibleFrame.maxX - popupSize.width - 8
-            )
-            let y = min(
-                max(visibleFrame.midY - (popupSize.height / 2), visibleFrame.minY + 8),
-                visibleFrame.maxY - popupSize.height - 8
-            )
-            return CGPoint(x: x, y: y)
-        }
-
-        var x = anchorRect.minX
-        var y = anchorRect.minY - popupSize.height - 8
-
-        if y < visibleFrame.minY + 8 {
-            y = anchorRect.maxY + 8
-        }
-
-        x = min(max(x, visibleFrame.minX + 8), visibleFrame.maxX - popupSize.width - 8)
-        y = min(max(y, visibleFrame.minY + 8), visibleFrame.maxY - popupSize.height - 8)
-
-        return CGPoint(x: x, y: y)
-    }
+private final class SnippetPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
 }
 
 private struct SnippetSuggestionListView: View {
     let snippets: [Snippet]
     let selectedIndex: Int
+    let metrics: InterfaceMetrics
     let onSelectSnippet: (Snippet) -> Void
     let onHoverSuggestion: (Int) -> Void
 
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    private let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-
     var body: some View {
-        Group {
-            if reduceTransparency {
-                content
-                    .background(Color(nsColor: .windowBackgroundColor), in: shape)
-            } else if #available(macOS 26.0, *) {
-                content
-                    .glassEffect(.regular.interactive(), in: shape)
-            } else {
-                content
-                    .background(.ultraThinMaterial, in: shape)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(snippets.enumerated()), id: \.element.id) { index, snippet in
+                        suggestionRow(snippet, index: index)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(width: metrics.size.snippetListWidth)
+                Rectangle().fill(Theme.Colors.separator).frame(width: Theme.Size.hairline)
+                preview
             }
+            Rectangle().fill(Theme.Colors.separator).frame(height: Theme.Size.hairline)
+            HStack(spacing: metrics.spacing.xl) {
+                Text("↩ insert")
+                Text("⇥ complete")
+                Spacer(minLength: 0)
+                Text("esc dismiss")
+            }
+            .font(metrics.typography.keyCap)
+            .foregroundStyle(Theme.Colors.textSecondary)
+            .padding(.horizontal, metrics.spacing.md)
+            .frame(height: metrics.size.barButtonHeight)
         }
-        .clipShape(shape)
+        .padding(metrics.spacing.sm)
+        .background(HUDGlassBackground(cornerRadius: metrics.radius.menuPanel))
+        .clipShape(RoundedRectangle(cornerRadius: metrics.radius.menuPanel))
+        .environment(\.metrics, metrics)
     }
 
-    private var content: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(snippets.enumerated()), id: \.element.id) { index, snippet in
-                suggestionRow(snippet, index: index)
-            }
+    private var preview: some View {
+        GeometryReader { geometry in
+            Text(snippets.indices.contains(selectedIndex) ? snippets[selectedIndex].content : "")
+                .font(metrics.typography.code)
+                .foregroundStyle(Theme.Colors.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(metrics.spacing.md)
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                .clipped()
+                .mask(alignment: .bottom) {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.primary, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: metrics.spacing.xxl)
+                    }
+                }
         }
-        .padding(5)
+        .accessibilityLabel("Snippet preview")
     }
 
     private func suggestionRow(_ snippet: Snippet, index: Int) -> some View {
-        let isSelected = index == selectedIndex
-
-        return HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(">\(snippet.trigger)")
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-
-                Text(snippet.content.replacingOccurrences(of: "\n", with: " "))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: metrics.spacing.xxs) {
+            Text(">\(snippet.trigger)")
+                .font(metrics.typography.rowTitle.bold())
+                .foregroundStyle(Theme.Colors.textPrimary)
+            if !snippet.title.isEmpty {
+                Text(snippet.title)
+                    .font(metrics.typography.keyCap)
+                    .foregroundStyle(Theme.Colors.textSecondary)
             }
-
-            Spacer(minLength: 8)
         }
-        .padding(.horizontal, 9)
-        .frame(height: 44)
+        .lineLimit(1)
+        .padding(.horizontal, metrics.spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .opacity(isSelected ? 1 : 0.72)
+        .frame(height: metrics.size.launcherRowHeight)
+        .background(index == selectedIndex ? Theme.Colors.selection : .clear,
+                    in: RoundedRectangle(cornerRadius: metrics.radius.row))
         .contentShape(Rectangle())
-        .onHover { isHovering in
-            if isHovering {
-                onHoverSuggestion(index)
+        .onHover { if $0 { onHoverSuggestion(index) } }
+        .onTapGesture { onSelectSnippet(snippet) }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onSelectSnippet(snippet) }
+    }
+}
+
+@MainActor
+private final class SnippetBackdropController {
+    private var window: SnippetPanel?
+    private var hideTask: Task<Void, Never>?
+
+    func show(on screen: NSScreen, popupFrame: CGRect) {
+        hideTask?.cancel()
+        hideTask = nil
+        let panel: SnippetPanel
+        if let window {
+            panel = window
+        } else {
+            panel = SnippetPanel(contentRect: screen.frame,
+                                 styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+            panel.hidesOnDeactivate = false
+            panel.ignoresMouseEvents = true
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
+            panel.hasShadow = false
+            window = panel
+        }
+        let focus = UnitPoint(
+            x: (popupFrame.midX - screen.frame.minX) / screen.frame.width,
+            y: (screen.frame.maxY - popupFrame.midY) / screen.frame.height)
+        let hosting = NSHostingView(rootView: SnippetBackdropView(focus: focus))
+        hosting.sizingOptions = []
+        panel.contentView = hosting
+        panel.setFrame(screen.frame, display: true)
+        if !panel.isVisible { panel.alphaValue = 0 }
+        panel.orderFrontRegardless()
+        setOpacity(1, on: panel)
+    }
+
+    func hide() {
+        guard let window, window.isVisible, hideTask == nil else { return }
+        setOpacity(0, on: window)
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            window.orderOut(nil)
+            return
+        }
+        hideTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(Theme.Duration.exit)) } catch { return }
+            guard let self else { return }
+            self.window?.orderOut(nil)
+            self.hideTask = nil
+        }
+    }
+
+    private func setOpacity(_ opacity: CGFloat, on window: NSWindow) {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            window.alphaValue = opacity
+        } else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Theme.Duration.exit
+                window.animator().alphaValue = opacity
             }
         }
-        .onTapGesture {
-            onSelectSnippet(snippet)
+    }
+
+    deinit { hideTask?.cancel() }
+}
+
+private struct SnippetBackdropView: View {
+    let focus: UnitPoint
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        GeometryReader { geometry in
+            if reduceTransparency {
+                Theme.Colors.snippetFallbackDim
+            } else {
+                RadialGradient(colors: [Theme.Colors.snippetFallbackFocus, Theme.Colors.snippetFallbackDim],
+                               center: focus, startRadius: 0, endRadius: max(geometry.size.width, geometry.size.height))
+            }
         }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

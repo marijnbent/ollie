@@ -792,3 +792,33 @@ The ⌘K menu samples `isRunning` **once, when it opens** (`RootPaletteView.open
 launching or quitting elsewhere can't add or drop those rows while the menu is up — the same freeze
 the rest of the menu already has ([palette.md](palette.md)). Only `LauncherList` observes
 `RunningAppsMonitor` live, for the running dot.
+
+## Inline snippets
+
+Outside Ollie, `>` starts an inline snippet query at the start of a line or after whitespace.
+The boundary comes from the focused AX value and selection when readable, otherwise from the last
+physical keystroke. Operators and tags such as `->`, `=>`, `a>b` and `<div>` do not start a query.
+Queries rank trigger matches ahead of title and content matches, showing up to six suggestions.
+The left column shows each trigger and title; the right previews the selected snippet's literal
+content, preserving whitespace and fading overflow. Hover or arrow keys select; click, Return or Tab
+insert the selected snippet, and Escape dismisses. An exact trigger still auto-expands only when no
+other trigger extends it; title/content matches never change that decision.
+
+The completing keystroke is consumed synchronously. `TextInjector` first replaces the already-forwarded
+trigger range through Accessibility, checking the trigger suffix before writing and reading the value
+back to confirm the replacement. Text-marker editors bypass AX writes. When AX replacement is
+unavailable or leaves the value unchanged, the same callback posts tagged backspaces and Unicode
+chunks through its event-tap proxy. Chunks contain at most four UTF-16 units, never split a scalar,
+and isolate newlines and tabs so AppKit cannot discard their adjacent text. A changed, unconfirmed AX
+value stops delivery instead of risking a second edit. Inline expansion does not borrow the clipboard.
+
+Placement is re-read on every query refresh: range caret bounds, text-marker caret bounds, focused
+text element's leading edge, then focused window. A previously resolved position remains a stable
+fallback if those reads fail, followed by the pointer and finally screen centre. AX global coordinates
+flip around the primary screen's height, including on displays above or taller than it. The popup
+clamps to the anchor screen's visible frame and flips above the anchor when needed.
+
+Both windows are non-activating and never become key. A fallback position also shows a separate
+click-through gradient over that display, below the popup, across Spaces and full-screen apps.
+Caret positions have no gradient. Reduce Motion disables its fade; Reduce Transparency replaces its
+gradient with a uniform appearance-aware dim. The popup uses the shared HUD glass and opaque treatment.

@@ -297,6 +297,7 @@
 		549D6F5AA11CED9DD67291AF /* InputSourceSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B612367CCA4B604C0249EBB /* InputSourceSwitcher.swift */; };
 		54B1AC0B1ECD5D50AF75372E /* SnippetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBD027B7AC5B1FFAC29046C /* SnippetStore.swift */; };
 		54C13CC01BE01DADD888BDE9 /* ExtensionRefreshIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B625377A456AA9631FB4A2 /* ExtensionRefreshIndicator.swift */; };
+		54CA5BFFC1E6F63392CC1F3F /* SnippetExpansionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6704B5E2FFCBCA13E553030 /* SnippetExpansionPolicy.swift */; };
 		54D567B51DDB7E6A0BB10997 /* ExecutableLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35BEE1E849506706B448422 /* ExecutableLocator.swift */; };
 		54E43D4389E2EB1FED12E343 /* ChatMarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDC090E171F1DF1358B22CF /* ChatMarkdownText.swift */; };
 		550A9629781C8378EC3EAA10 /* RoomParking.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E17525D76C5135ABF6AE8D /* RoomParking.swift */; };
@@ -1642,6 +1643,7 @@
 		E598070D7C60DAA1801AE238 /* SwitcherPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPanelController.swift; sourceTree = "<group>"; };
 		E5E3D281F3BBA5D0C4BEE43A /* NoteFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteFormatting.swift; sourceTree = "<group>"; };
 		E662FAB91507547997CFBBA4 /* VolumeHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeHUDController.swift; sourceTree = "<group>"; };
+		E6704B5E2FFCBCA13E553030 /* SnippetExpansionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetExpansionPolicy.swift; sourceTree = "<group>"; };
 		E676DE08D6900A7445151301 /* InstalledAILaunch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstalledAILaunch.swift; sourceTree = "<group>"; };
 		E67884B7A7F0C94B8238BA84 /* MessageHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageHUDController.swift; sourceTree = "<group>"; };
 		E6F107F57A4DDCBAD6986A9C /* RaycastImportSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastImportSelection.swift; sourceTree = "<group>"; };
@@ -3859,6 +3861,7 @@
 				F4CE796402BEB4F5E05B30A1 /* ClipboardItem.swift */,
 				CEB188424C2F6F161319CF9C /* ClipboardResult.swift */,
 				89DEB5EEEFF91E5BFE9A2220 /* Snippet.swift */,
+				E6704B5E2FFCBCA13E553030 /* SnippetExpansionPolicy.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -4663,6 +4666,7 @@
 				ED1BD23022323EE8FCD478DD /* Signposts.swift in Sources */,
 				748A5A3B3CD85083A24C66B9 /* Snippet.swift in Sources */,
 				24AB6B9F45661BCA4281F509 /* SnippetExpansionController.swift in Sources */,
+				54CA5BFFC1E6F63392CC1F3F /* SnippetExpansionPolicy.swift in Sources */,
 				54B1AC0B1ECD5D50AF75372E /* SnippetStore.swift in Sources */,
 				18A4709E84E6E8AB28A47D51 /* SoundEngine.swift in Sources */,
 				ECE9CF9573689A873291E085 /* SoundProfile.swift in Sources */,

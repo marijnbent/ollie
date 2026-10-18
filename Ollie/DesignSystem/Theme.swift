@@ -65,6 +65,11 @@ enum Theme {
     }
 
     enum Size {
+        static let snippetPopupWidth: CGFloat = 580
+        static let snippetListWidth: CGFloat = 230
+        static let snippetMinimumRows = 3
+        static let snippetVisibleRows = 6
+
         static let detailListWidth: CGFloat = 290
         static let panelWidth: CGFloat = 750
         static let panelHeight: CGFloat = 475
@@ -444,6 +449,10 @@ enum Theme {
 
         /// The ramp's inverse: the scrim darkens the dark surface and lightens the light one.
         static let panelScrim = adaptive(dark: .srgbInk(0, alpha: 0.40), light: .srgbInk(1, alpha: 0.55))
+        static let snippetFallbackDim = adaptive(
+            dark: .srgbInk(0, alpha: 0.18), light: .srgbInk(0, alpha: 0.08))
+        static let snippetFallbackFocus = adaptive(
+            dark: .srgbInk(0, alpha: 0.04), light: .srgbInk(1, alpha: 0.04))
         static let hudGlassTint = Color(nsColor: .windowBackgroundColor).opacity(0.18)
         static let hudOpaqueTint = Color(nsColor: .windowBackgroundColor).opacity(0.96)
         static let hudGlassBorder = Color.white.opacity(0.14)

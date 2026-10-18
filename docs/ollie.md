@@ -17,10 +17,12 @@ Each switch controls its service lifecycle; the shared HealthTicker recovers inp
 permissions change. Synthetic input carries the host Paster marker so it cannot trigger sounds or
 another input handler. Dictation temporarily silences typing sounds and snippet expansion.
 
-Snippet auto-expansion consumes the completing key inside the event-tap callback. Replacement
-events use that callback's proxy and delete only the trigger characters already forwarded to the
-target. Deferred suggestion refreshes never insert text. Tab and Return consume the selection key
-and replace the full typed trigger through the same event stream.
+Snippet auto-expansion consumes the completing key inside the event-tap callback. TextInjector
+first tries confirmed AX replacement of the already-forwarded trigger range. When AX
+is unavailable, tagged backspaces and scalar-safe Unicode chunks use that callback's proxy. Newline
+and tab chunks are isolated from adjacent text. Deferred suggestion refreshes never insert text.
+Tab and Return consume the selection key and use the same replacement path. See
+[Inline snippets](features/launcher.md#inline-snippets) for boundaries, preview and placement.
 
 `FeatureAvailability` is the shared rule for feature ownership. Settings panes, palette modes,
 commands, shortcut registration and action dispatch use it. Launcher owns its saved child options;

@@ -588,10 +588,13 @@ run diagnostics-test -parse-as-library Ollie/Platform/Diagnostics.swift Ollie/Pl
 run ollie-dictation-test -parse-as-library Ollie/Platform/Diagnostics.swift Ollie/Features/Dictation/Service/{CelerisClient,OpenRouterClient,DictationHTTP}.swift Tests/Dictation/*.swift Ollie/Platform/AppPaths.swift Ollie/Features/Dictation/Runtime/{Ports,RecordingRuntime,PasteRuntime,ShortcutRuntime,ShortcutStateMachine}.swift Ollie/Features/Dictation/Service/AudioCaptureController.swift Ollie/Features/Dictation/Service/AudioBufferConverter.swift Ollie/Features/Dictation/Service/AudioInputSelection.swift Ollie/Features/Dictation/Service/DeepgramLanguage.swift Ollie/Features/Dictation/Service/TranscriptionProvider.swift Ollie/Features/Dictation/Service/EnhancementProvider.swift Ollie/Features/Dictation/Service/ShortcutConfig.swift Ollie/Features/Dictation/Service/Hotkey.swift Ollie/Features/Dictation/Service/RecordingOwnership.swift Ollie/Features/Dictation/Service/ShortcutOwnershipPolicy.swift Ollie/Features/Dictation/Service/StatusModel.swift Ollie/Features/Dictation/Service/LogEntry.swift Ollie/Features/Dictation/Service/DictationSessionState.swift Ollie/Features/Dictation/Service/DictationPreferences.swift Ollie/Features/Dictation/Service/TranscriptHistoryStore.swift Ollie/Features/Dictation/Service/RawRecordingStore.swift Ollie/Features/Dictation/Service/SystemMuteController.swift Ollie/Features/Dictation/Service/TranscriptionReconnectPolicy.swift Ollie/Features/Dictation/Service/String+Trim.swift
 run ollie-switcher-test -parse-as-library Ollie/Platform/Diagnostics.swift Ollie/Features/WindowSwitcher/Service/*.swift
 run snippet-expansion-test -parse-as-library \
-    Ollie/Features/Clipboard/Model/Snippet.swift \
+    Ollie/Features/Clipboard/Model/{Snippet,SnippetExpansionPolicy}.swift \
     Ollie/Features/Clipboard/Service/SnippetStore.swift \
     Ollie/Features/Clipboard/Service/SnippetExpansionController.swift \
-    Ollie/Platform/Diagnostics.swift
+    Ollie/Features/TextInjection/Service/*.swift \
+    Ollie/Features/Quicklinks/Model/QuicklinkTemplateEngine.swift \
+    Ollie/DesignSystem/{Theme,InterfaceMetrics,HUDGlassBackground}.swift \
+    Ollie/Platform/{Diagnostics,NotificationToken,Appearance,Paster,PasteboardFiles,Permissions,AccessibilityText,CalendarAccess,CameraAccess}.swift
 run ollie-clipboard-test -parse-as-library \
     Ollie/Features/Clipboard/Model/*.swift \
     Ollie/Features/Clipboard/Service/ClipboardSearchSession.swift \

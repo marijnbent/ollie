@@ -21,12 +21,24 @@ struct TextInjectionTests {
         let chunks = UnicodeTypingChunk.split(text)
         precondition(chunks.allSatisfy { $0.count <= 4 })
         precondition(String(decoding: chunks.flatMap { $0 }, as: UTF16.self) == text)
+        let multiline = "first\n\tsecond\nlast"
+        let multilineChunks = UnicodeTypingChunk.split(multiline)
+        precondition(String(decoding: multilineChunks.flatMap { $0 }, as: UTF16.self) == multiline)
+        precondition(multilineChunks.filter { $0.contains(10) || $0.contains(9) }.allSatisfy { $0.count == 1 })
         precondition(TextReplacementPolicy.confirmsReplacement(
             originalValue: "one two", replacementRange: NSRange(location: 4, length: 3),
             insertedText: "three", observedValue: "one three"))
         precondition(!TextReplacementPolicy.confirmsReplacement(
             originalValue: "one two", replacementRange: NSRange(location: 4, length: 3),
             insertedText: "three", observedValue: "one two"))
+
+        precondition(TextReplacementPolicy.triggerRange(
+            ">fi", in: "Before >Fi", selectedRange: NSRange(location: 10, length: 0))
+            == NSRange(location: 7, length: 3))
+        precondition(TextReplacementPolicy.triggerRange(
+            ">fi", in: "Different", selectedRange: NSRange(location: 9, length: 0)) == nil)
+        precondition(TextReplacementPolicy.triggerRange(
+            ">fi", in: ">fi", selectedRange: NSRange(location: 0, length: 3)) == nil)
 
         let queue = DeliveryQueue()
         var deliveries: [Int] = []

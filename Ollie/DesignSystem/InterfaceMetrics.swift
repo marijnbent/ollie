@@ -56,6 +56,8 @@ struct InterfaceMetrics: Equatable, Sendable {
     }
 
     struct Size: Equatable, Sendable {
+        var snippetPopupWidth: CGFloat { scaledPoints(Theme.Size.snippetPopupWidth, scale) }
+        var snippetListWidth: CGFloat { scaledPoints(Theme.Size.snippetListWidth, scale) }
         var detailListWidth: CGFloat { scaledPoints(Theme.Size.detailListWidth, scale) }
         let scale: CGFloat
 
