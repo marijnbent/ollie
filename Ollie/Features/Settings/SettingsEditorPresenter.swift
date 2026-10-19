@@ -408,6 +408,7 @@ extension View {
         environment(\.settingsEditorPresenter, editorPresenter)
             .environment(navigation)
             .environment(core)
+            .environment(core.onboardingCoordinator)
             .environment(core.typingSounds)
             .environment(core.spaces)
             .environment(core.notifications)

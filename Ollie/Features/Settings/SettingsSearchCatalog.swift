@@ -145,6 +145,7 @@ enum SettingsSearchCatalog {
             .generalGeneral, "Automatically check for updates",
             keywords: ["software", "update", "automatic", "disable", "popup"]),
         .init(.generalGeneral, "Diagnostics", keywords: ["logging", "logs", "debug", "performance", "troubleshoot"]),
+        .init(.generalGeneral, "Setup", keywords: ["onboarding", "welcome", "spotlight", "fn", "globe", "permissions"]),
         .init(
             .generalGeneral, "Pop to Root Search",
             keywords: ["reset", "timeout", "back"]),

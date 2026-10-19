@@ -3,6 +3,7 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @Environment(AppCore.self) private var core
     @Environment(AppSettings.self) private var settings
+    @Environment(OnboardingCoordinator.self) private var onboarding
     private var launcherRanking: LauncherRankingStore { core.launcherRanking }
     @State private var confirmingRankingReset = false
     @State private var inputSources: [InputSourceSwitcher.Option] = []
@@ -21,6 +22,9 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                SettingsRow(title: "Setup", anchor: .generalGeneral) {
+                    Button("Open Setup…", action: onboarding.showOnboarding)
+                }
                 Toggle(isOn: $settings.launchAtLogin) {
                     SettingsRowTitle(.generalGeneral, "Launch at login")
                 }

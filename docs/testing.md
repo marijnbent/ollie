@@ -659,6 +659,12 @@ tccutil reset Accessibility nl.bentjes.fredie.dev 2>/dev/null || true
 ```
 
 - Launches with every store directory absent — no crash, no hang; onboarding runs
+- Onboarding has two pages; Back and Continue preserve recorded shortcuts. Spotlight and Fn/Globe
+  open their Keyboard settings destinations, and returning retries launcher shortcut registration.
+  Permissions update after grants; skipping them still finishes. General › Setup reopens the flow.
+  The isolated Debug flag `--preview-ollie-onboarding` opens the actual onboarding window without
+  starting background features and requires bundle id `nl.bentjes.ollie.verification`. Add `--dark`
+  to inspect Dark appearance; the preview otherwise uses Light.
 - Palette opens and lists apps; quicklinks and calculator history are all empty
   and all accept a first entry
 - Notes creates no directory until Show, Create, or Search is first used, then accepts its first edit

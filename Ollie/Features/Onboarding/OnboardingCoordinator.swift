@@ -1,11 +1,17 @@
+import Carbon.HIToolbox
 import SwiftUI
 
-/// The first-run wizard's own window lifecycle.
 @MainActor
+@Observable
 final class OnboardingCoordinator {
+    enum SettingsDestination: String {
+        case spotlight = "com.apple.Keyboard-Settings.extension?Spotlight"
+        case keyboard = "com.apple.Keyboard-Settings.extension"
+    }
+
     private let window: AppWindowController
-    /// Environment injection only — never for state this type owns.
     private unowned let core: AppCore
+    private(set) var error: String?
 
     init(core: AppCore) {
         self.core = core
@@ -14,24 +20,55 @@ final class OnboardingCoordinator {
             activation: core.activationPolicy)
     }
 
-    /// The window takes the height the current step measured, so no step is clipped or padded out.
     func fit(height: CGFloat) {
         window.fitContent(width: OnboardingView.width, height: height)
     }
 
     func showOnboarding() {
+        error = nil
         window.show {
             OnboardingView()
-                .environment(self.core)
+                .environment(self)
                 .environment(self.core.settings)
                 .environment(self.core.hotKeys)
+                .environment(self.core.dictation.permissions)
         }
     }
 
-    /// Final step: close the wizard and drop straight into the launcher.
+    func useCommandSpace() {
+        let binding = HotKeyBinding.combo(KeyShortcut(carbonKeyCode: kVK_Space, carbonModifiers: cmdKey))
+        if let owner = core.hotKeys.conflictOwner(of: binding, excluding: .togglePalette) {
+            error = "⌘Space is already assigned to \(owner). Choose another shortcut."
+            return
+        }
+        error = nil
+        core.hotKeys.setBinding(binding, for: .togglePalette)
+    }
+
+    func openSettings(_ destination: SettingsDestination) {
+        guard let url = URL(string: "x-apple.systempreferences:\(destination.rawValue)"),
+              NSWorkspace.shared.open(url) else {
+            error = "Could not open System Settings. Open Keyboard settings from the Apple menu."
+            return
+        }
+        error = nil
+    }
+
+    func setUpDictation() {
+        core.settings.dictationEnabled = true
+        core.settingsCoordinator.showSettings(tab: .dictation)
+    }
+
+    func refreshShortcuts() {
+        core.hotKeys.refreshRegistrations()
+    }
+
     func finishOnboarding() {
+        core.hotKeys.recordingAction = nil
         window.close()
-        core.paletteCoordinator.showPalette(mode: .launcher)
+        if core.settings.launcherEnabled {
+            core.paletteCoordinator.showPalette(mode: .launcher)
+        }
     }
 
     func focusExisting() -> Bool {

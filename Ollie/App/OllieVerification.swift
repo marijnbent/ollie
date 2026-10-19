@@ -4,6 +4,12 @@ import SwiftUI
 
 @MainActor enum OllieVerification {
     static func runIfRequested() -> Bool {
+        if CommandLine.arguments.contains("--preview-ollie-onboarding") {
+            guard Bundle.main.bundleIdentifier == "nl.bentjes.ollie.verification" else { exit(2) }
+            NSApp.appearance = NSAppearance(named: CommandLine.arguments.contains("--dark") ? .darkAqua : .aqua)
+            AppCore.shared.onboardingCoordinator.showOnboarding()
+            return true
+        }
         if CommandLine.arguments.contains("--verify-ollie-launcher") {
             guard Bundle.main.bundleIdentifier == "nl.bentjes.ollie.verification" else { exit(2) }
             Task {

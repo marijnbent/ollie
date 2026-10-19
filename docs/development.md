@@ -61,6 +61,22 @@ Consequences worth knowing:
   and the Apple Development identity keep the TCC grant alive.
 - Don't bind the same global hotkey in both — whichever registered first wins.
 
+## First-launch onboarding
+
+The first launch shows two compact pages: shortcuts, then permissions. The launcher recorder keeps
+existing bindings; **Use ⌘Space** explicitly assigns the suggested shortcut after checking Ollie's
+other bindings. Spotlight opens its Keyboard Shortcuts settings, where the user disables
+Show Spotlight search and clicks Done. Returning to Ollie retries shortcut registration. Fn/Globe opens
+Keyboard settings with guidance to choose Do Nothing only when using Fn for Ollie dictation.
+These links never change macOS preferences automatically; users restore
+those settings themselves if they later disable Ollie's features.
+
+Accessibility and Microphone grants are optional and refresh while the window is open. **Set Up…**
+under Dictation enables that feature and opens its settings for the shortcut and provider credentials.
+Raycast import remains in Backup settings. **General › Setup › Open Setup…** reopens onboarding
+without resetting preferences. The existing per-bundle first-run marker still prevents repeated
+automatic presentation, including after closing the window mid-flow.
+
 ## Editor
 
 Xcode works out of the box and needs nothing here. Everything below is optional, and which editor you
