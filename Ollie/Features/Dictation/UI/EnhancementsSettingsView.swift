@@ -87,6 +87,13 @@ struct EnhancementsSettingsView: View {
                     .labelsHidden()
                     .frame(width: Theme.Size.settingsSecretWidth)
             }
+            SettingsRow(title: "Mercury") {
+                RevealableSecureField(
+                    title: "Mercury API key", text: viewModel.binding(for: \.mercuryApiKey), prompt: Text("API key")
+                )
+                    .labelsHidden()
+                    .frame(width: Theme.Size.settingsSecretWidth)
+            }
         } header: {
             Text("Providers")
         } footer: {

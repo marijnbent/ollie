@@ -26,6 +26,7 @@ private final class HistoryFixture: TranscriptHistoryPersisting, @unchecked Send
 
 @main @MainActor struct OllieDictationTests {
     static func main() async throws {
+        try mercuryRequests()
         await RecordingRuntimeTests().testReconnectsOnceThenStopsRetryingAndFinalizes()
         await RecordingRuntimeTests().testDoesNotReconnectWhileFinalizing()
         await RecordingRuntimeTests().testProviderErrorIsPreservedWhenConnectionThenDrops()
@@ -50,6 +51,38 @@ private final class HistoryFixture: TranscriptHistoryPersisting, @unchecked Send
         diagnosticLogging()
         try await historyPersistence()
         print("PASS: dictation runtime, awaited shutdown, clipboard ownership and history retry scenarios")
+    }
+
+    private static func mercuryRequests() throws {
+        let request = try MercuryClient.makeRequest(
+            transcript: "hello there", prompt: "Fix punctuation.", apiKey: "test-key",
+            model: EnhancementProvider.mercury.defaultModel
+        )
+        assertEqual(request.url?.absoluteString, "https://api.inceptionlabs.ai/v1/chat/completions")
+        assertEqual(request.httpMethod, "POST")
+        assertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+        let body = try unwrap(JSONSerialization.jsonObject(with: unwrap(request.httpBody)) as? [String: Any])
+        assertEqual(body["model"] as? String, "mercury-3")
+        assertEqual(body["reasoning_effort"] as? String, "low")
+        let messages = try unwrap(body["messages"] as? [[String: String]])
+        assertEqual(messages, [["role": "user", "content": "Fix punctuation.\n\n<transcription>hello there</transcription>"]])
+        let response = Data(#"{"choices":[{"message":{"content":"Hello there.","reasoning_content":"private reasoning"}}]}"#.utf8)
+        assertEqual(try MercuryClient.content(from: response), "Hello there.")
+        for response in [
+            #"{"choices":[]}"#,
+            #"{"choices":[{"message":{"content":null}}]}"#,
+            #"{"choices":[{"message":{"content":" "}}]}"#
+        ] {
+            do {
+                _ = try MercuryClient.content(from: Data(response.utf8))
+                testFailure("Empty Mercury output must fail")
+            } catch MercuryError.noContent {
+            }
+        }
+        let prompt = PromptConfig.makeDefault(provider: .mercury)
+        let restored = try JSONDecoder().decode(PromptConfig.self, from: JSONEncoder().encode(prompt))
+        assertEqual(restored.provider, .mercury)
+        assertEqual(restored.model, "mercury-3")
     }
 
     private static func diagnosticLogging() {

@@ -45,6 +45,7 @@ final class DictationSettingsStore {
             museApiKey = try DictationCredential.store.secret(for: DictationCredential.muse.account) ?? ""
             openRouterApiKey = try DictationCredential.store.secret(for: DictationCredential.openRouter.account) ?? ""
             celerisApiKey = try DictationCredential.store.secret(for: DictationCredential.celeris.account) ?? ""
+            mercuryApiKey = try DictationCredential.store.secret(for: DictationCredential.mercury.account) ?? ""
             credentialsLoaded = true
             credentialError = nil
         } catch { credentialError = "Could not read dictation keys from Keychain." }
@@ -117,6 +118,12 @@ final class DictationSettingsStore {
     var celerisApiKey: String {
         didSet {
             saveCredential(celerisApiKey, kind: .celeris)
+        }
+    }
+
+    var mercuryApiKey: String {
+        didSet {
+            saveCredential(mercuryApiKey, kind: .mercury)
         }
     }
 
@@ -254,6 +261,12 @@ final class DictationSettingsStore {
                 apiKey: celerisApiKey.trimmed,
                 model: model.trimmed
             )
+        case .mercury:
+            EnhancementProviderSettings(
+                provider: .mercury,
+                apiKey: mercuryApiKey.trimmed,
+                model: model.trimmed
+            )
         }
     }
 
@@ -351,6 +364,7 @@ final class DictationSettingsStore {
         legacyOpenRouterModel = savedOpenRouterModel ?? EnhancementProvider.openRouter.defaultModel
         openRouterApiKey = ""
         celerisApiKey = ""
+        mercuryApiKey = ""
 
         if let data = defaults.data(forKey: Self.promptsKey),
            let decoded = try? JSONDecoder().decode([PromptConfig].self, from: data) {
@@ -379,7 +393,7 @@ final class DictationSettingsStore {
     private func legacyModel(for provider: EnhancementProvider) -> String {
         switch provider {
         case .openRouter: legacyOpenRouterModel
-        case .celeris: provider.defaultModel
+        case .celeris, .mercury: provider.defaultModel
         }
     }
 

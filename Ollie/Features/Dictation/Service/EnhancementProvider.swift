@@ -3,6 +3,7 @@ import Foundation
 enum EnhancementProvider: String, CaseIterable, Codable, Identifiable, Sendable {
     case openRouter
     case celeris
+    case mercury
 
     var id: String { rawValue }
 
@@ -10,6 +11,7 @@ enum EnhancementProvider: String, CaseIterable, Codable, Identifiable, Sendable 
         switch self {
         case .openRouter: "OpenRouter"
         case .celeris: "Celeris"
+        case .mercury: "Mercury"
         }
     }
 
@@ -17,6 +19,7 @@ enum EnhancementProvider: String, CaseIterable, Codable, Identifiable, Sendable 
         switch self {
         case .openRouter: "inception/mercury-2"
         case .celeris: CelerisClient.model
+        case .mercury: MercuryClient.model
         }
     }
 }
@@ -53,6 +56,13 @@ enum EnhancementClient {
             )
         case .celeris:
             return try await CelerisClient.enhance(
+                transcript: transcript,
+                prompt: prompt,
+                apiKey: settings.apiKey,
+                model: settings.model
+            )
+        case .mercury:
+            return try await MercuryClient.enhance(
                 transcript: transcript,
                 prompt: prompt,
                 apiKey: settings.apiKey,

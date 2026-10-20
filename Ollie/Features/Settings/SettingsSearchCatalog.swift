@@ -121,7 +121,7 @@ enum SettingsSearchCatalog {
         general + applications + emoji + ai + permissions + backup + about
         + [.init(pane: .features, keywords: ["enable", "disable", "launcher", "clipboard", "snippets", "dictation", "window switcher", "spaces", "strafe", "AI", "typing sounds", "network", "notifications", "media import"]),
            .init(pane: .shortcuts, keywords: ["keyboard", "hotkeys", "bindings"]),
-           .init(pane: .dictation, keywords: ["talkie", "speech", "microphone", "transcription"]),
+           .init(pane: .dictation, keywords: ["talkie", "speech", "microphone", "transcription", "mercury", "inception"]),
            .init(pane: .windowSwitcher, keywords: ["tabbie", "command tab", "windows"])]
         + [.init(pane: .clipboard, keywords: ["clippie", "history", "paste", "copy"]), .init(pane: .snippets, keywords: ["expand", "trigger", "text"]) ]
         + [.init(pane: .mediaImport, keywords: ["camera", "card", "video", "importie", "ffmpeg"])]

@@ -688,6 +688,7 @@
 		BFFB2EF1CAEFF56CE6423848 /* DeepgramClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD7481CB297E47254CA4722 /* DeepgramClient.swift */; };
 		C0083509D53D69A48B45D4D0 /* LauncherSuggestions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4685CEC6DC89C056EDB3C384 /* LauncherSuggestions.swift */; };
 		C035E3AF6235141C26149274 /* DictionaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3692B3D8AFF7F6A5162FB5C4 /* DictionaryService.swift */; };
+		C0A8E9AFAE7224CC8F73498D /* MercuryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39B0903D3563A6FD2105B82 /* MercuryClient.swift */; };
 		C11CCAFE428F684FC373BFC4 /* BackupArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = D905A69B76C0477D3E2219B1 /* BackupArchive.swift */; };
 		C1322372ED4CDE6730B99B0F /* ShortcutCaptureSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6AD59AEBF8E1BDFCA3EED1 /* ShortcutCaptureSession.swift */; };
 		C18F0117C7AEA18976F172DC /* CommandID.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6EE6BF488F8C194D56DE546 /* CommandID.swift */; };
@@ -1576,6 +1577,7 @@
 		D2B912724D091F3A0E2277A8 /* PaletteScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteScreen.swift; sourceTree = "<group>"; };
 		D2D47EFF94E8734471370BC7 /* ShortcutStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutStateMachine.swift; sourceTree = "<group>"; };
 		D37955BCD70E5CD4E21B5DE5 /* AIConnectionEditorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIConnectionEditorPanel.swift; sourceTree = "<group>"; };
+		D39B0903D3563A6FD2105B82 /* MercuryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MercuryClient.swift; sourceTree = "<group>"; };
 		D3DA938DBC948A1A7E0DDCCD /* InstalledAIStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstalledAIStream.swift; sourceTree = "<group>"; };
 		D3E8F9ECD4572914738E84CB /* KeychainSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStore.swift; sourceTree = "<group>"; };
 		D4244EBA783B40DB8A6FD719 /* SystemPromptEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemPromptEditor.swift; sourceTree = "<group>"; };
@@ -2719,6 +2721,7 @@
 				4AC8420EEE93B740B7D2DE04 /* EscCancelMonitor.swift */,
 				17063C8104C2B20CEC827238 /* Hotkey.swift */,
 				832AD5F1240531E7F0EDE8FF /* LogEntry.swift */,
+				D39B0903D3563A6FD2105B82 /* MercuryClient.swift */,
 				FAD249713BB833E8877619E5 /* MuseClient.swift */,
 				96549C39659027240EE004D0 /* MusePrerecordedClient.swift */,
 				B0CDC7729840C83BBE5DBB1A /* OpenRouterClient.swift */,
@@ -4440,6 +4443,7 @@
 				F53E80DD77F9537DE1BB70B3 /* MenuSearchTarget.swift in Sources */,
 				4F1897A1F05488C934F4EA85 /* MenuSnapshotPolicy.swift in Sources */,
 				53026162EE5C71324755D601 /* MenuTreeNode.swift in Sources */,
+				C0A8E9AFAE7224CC8F73498D /* MercuryClient.swift in Sources */,
 				BBF68063C5A285BB5A0C79EB /* MessageHUDController.swift in Sources */,
 				3AE15D57A47DA386B8B10968 /* MessageHUDView.swift in Sources */,
 				4476A7F5A896AAA0C840D5B0 /* ModalActionButtonStyle.swift in Sources */,
