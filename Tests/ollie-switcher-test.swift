@@ -65,6 +65,17 @@ struct OllieSwitcherTests {
         check("first focus action completes", await first.value == .success)
         check("cancelled queued focus never reaches AX", await cancelled.value == .cannotComplete && focusGate.count == 1)
 
+        let localWorker = AXFocusWorker(
+            action: { _, _ in Thread.isMainThread ? .success : .cannotComplete },
+            focused: { _ in Thread.isMainThread }
+        )
+        let localTarget = AXWindowTarget(pid: getpid(), element: AXUIElementCreateApplication(getpid()))
+        for action in [AXWindowAction.unminimize, .raise, .makeMain, .focus, .close] {
+            check("own window actions use AppKit's main thread", await localWorker.perform(action, target: localTarget) == .success)
+        }
+        check("own window focus reads use the main thread", await localWorker.isFocused(localTarget))
+        check("own window closes use the main thread", await localWorker.closeWindow(pid: getpid(), target: localTarget) == .success)
+
         let snapshotGate = SnapshotGate()
         let cache = CGWindowSnapshotCache { await snapshotGate.read() }
         let reads = (0..<20).map { _ in Task { await cache.snapshot() } }

@@ -29,7 +29,7 @@ struct AXFocusWorker: Sendable {
     }
 
     func perform(_ action: AXWindowAction, target: AXWindowTarget) async -> AXError {
-        await run { [self] in
+        await run(pid: target.pid) { [self] in
 
         guard !Task.isCancelled else { return .cannotComplete }
         return self.action(action, target)
@@ -38,7 +38,7 @@ struct AXFocusWorker: Sendable {
     }
 
     func isFocused(_ target: AXWindowTarget) async -> Bool {
-        await run { [self] in
+        await run(pid: target.pid) { [self] in
 
         guard !Task.isCancelled else { return false }
         return focused(target)
@@ -47,7 +47,7 @@ struct AXFocusWorker: Sendable {
     }
 
     func windowID(for target: AXWindowTarget) async -> CGWindowID? {
-        await run {
+        await run(pid: target.pid) {
 
         guard !Task.isCancelled,
               let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "_AXUIElementGetWindow") else { return nil }
@@ -62,7 +62,7 @@ struct AXFocusWorker: Sendable {
     }
 
     func closeWindow(pid: pid_t, target: AXWindowTarget?) async -> AXError {
-        await run { [self] in
+        await run(pid: pid) { [self] in
 
         guard !Task.isCancelled else { return .cannotComplete }
         if let target { return self.action(.close, target) }
@@ -78,7 +78,8 @@ struct AXFocusWorker: Sendable {
         }
     }
 
-    private func run<T: Sendable>(_ operation: @escaping @Sendable () -> T) async -> T {
+    private func run<T: Sendable>(pid: pid_t, _ operation: @escaping @Sendable () -> T) async -> T {
+        if pid == getpid() { return await MainActor.run(body: operation) }
         let task = Task.detached(priority: .userInitiated) { [lock] in lock.withLock(operation) }
         return await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
     }

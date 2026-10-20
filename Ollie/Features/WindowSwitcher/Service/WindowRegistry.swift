@@ -87,6 +87,7 @@ final class WindowRegistry {
         let frontmost = frontmostApplication()
         let frontmostPID = frontmost?.processIdentifier
         let apps = trackedApps.values
+            .filter { isDiscoverable($0.runningApplication) }
             .filter {
                 windowScope == .allApps || $0.runningApplication.processIdentifier == frontmostPID ||
                     SteamApplication.isSameApp(
@@ -648,7 +649,7 @@ private struct AXWindowDiscoveryWorker: Sendable {
         previousWindows: [AXWindow],
         allowUnknownWindows: Bool
     ) async -> AXAppWindowReadResult {
-        return await run { [self] in
+        return await run(pid: pid) { [self] in
 
         diagnostics.measure("windowRegistry.readWindows pid=\(pid)", thresholdMilliseconds: 20) {
             inventoryReader.read(
@@ -665,7 +666,7 @@ private struct AXWindowDiscoveryWorker: Sendable {
         windows: [AXWindow],
         callback: @escaping @Sendable (AXRegistryEvent) -> Void
     ) async -> AXObserverController? {
-        return await run { [self] in
+        return await run(pid: pid) { [self] in
 
         guard let observer = AXObserverController(pid: pid, callback: callback) else {
             return nil
@@ -677,14 +678,15 @@ private struct AXWindowDiscoveryWorker: Sendable {
     }
 
     func updateObserver(_ observer: AXObserverController, pid: pid_t, windows: [AXWindow]) async {
-        await run { [self] in
+        await run(pid: pid) { [self] in
 
         configure(observer, pid: pid, windows: windows)
 
         }
     }
 
-    private func run<T: Sendable>(_ operation: @escaping @Sendable () -> T) async -> T {
+    private func run<T: Sendable>(pid: pid_t, _ operation: @escaping @Sendable () -> T) async -> T {
+        if pid == getpid() { return await MainActor.run(body: operation) }
         let task = Task.detached(priority: .utility) { [lock] in lock.withLock(operation) }
         return await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
     }

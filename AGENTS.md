@@ -134,7 +134,13 @@ feature's doc, under its own `## Invariants`.
 
 Each item is explained in [testing.md](docs/testing.md#definition-of-done).
 
-- `./scripts/run-tests.sh` passes.
+- Keep verification proportional: run focused checks for the changed behavior and stop once they
+  provide enough evidence. Do not run the full suite automatically for a small fix.
+- Ask before tests that open or activate windows, move focus, send input, or may trigger macOS
+  permission prompts. A separate test app still uses Marijn's live desktop; it is not isolation.
+  A requested release authorizes restarting Ollie, not additional interactive tests.
+- Relevant harnesses pass via `./scripts/run-tests.sh <harness>`; use the full suite when the change
+  warrants broader coverage, subject to the desktop-interaction permission rule above.
 - The Debug build compiles with **no new warnings**.
 - `./scripts/lint.sh` is clean.
 - `grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Ollie/Features/*/Model/` returns nothing.

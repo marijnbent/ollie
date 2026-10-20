@@ -38,6 +38,11 @@ may finish its durable bookkeeping; room cleanup returns parked windows and hidd
 provider keys and preferences remain intact. Shared dialogs dismiss only their cancelled owner's
 request. Settings and the primary status item remain available with every feature off.
 
+The window switcher includes Ollie's own standard windows, including Settings, while they are open.
+Closing the last app window returns Ollie to accessory mode and removes it from the switcher.
+Accessibility reads and actions targeting Ollie run on the main thread because AppKit handles them
+in process; access to other apps remains on the serialized background workers.
+
 Spaces integrates Strafe's trackpad interception, desktop boundary prediction, and Instant/Quick/Smooth
 transition presets. Its master switch starts off; Accessibility is reused and retried by HealthTicker.
 Only gesture/Dock events enter its tap. Mission Control gestures and synthetic input pass through.

@@ -190,7 +190,8 @@ final class WindowDiscovery {
         let frontmostWindowIndex = frontmostWindowIndex(for: discoveredApp, context: context)
 
         if discoveredApp.windows.isEmpty {
-            if WineApplication.wrapperURL(for: discoveredApp.app) != nil ||
+            if discoveredApp.app.processIdentifier == getpid() ||
+                WineApplication.wrapperURL(for: discoveredApp.app) != nil ||
                 SteamApplication.isSteamHelper(discoveredApp.app.bundleIdentifier) ||
                 (discoveredApp.app.bundleIdentifier == SteamApplication.bundleID &&
                     context.discoveredApps.contains { SteamApplication.isSteamHelper($0.app.bundleIdentifier) && !$0.windows.isEmpty }) {
@@ -358,7 +359,6 @@ final class WindowDiscovery {
     private func isDiscoverable(_ app: NSRunningApplication) -> Bool {
         (app.activationPolicy == .regular ||
             (SteamApplication.isSteamHelper(app.bundleIdentifier) && app.activationPolicy == .accessory)) &&
-            app.bundleIdentifier != Bundle.main.bundleIdentifier &&
             !app.isTerminated
     }
 

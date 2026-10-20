@@ -9,7 +9,7 @@ The mechanical bar, in one place so it cannot drift. All five pass before a chan
 
 | Check | Command |
 | --- | --- |
-| The harnesses | `./scripts/run-tests.sh` |
+| Relevant harnesses | `./scripts/run-tests.sh <harness>`; full suite only when broader coverage is warranted |
 | Lint | `./scripts/lint.sh` |
 | Pure-layer purity | `grep -rln 'import AppKit\|import SwiftUI\|import Cocoa' Ollie/Features/*/Model/` |
 | A clean build | `xcodebuild … -configuration Debug CODE_SIGNING_ALLOWED=NO`, zero **new** warnings |
@@ -18,6 +18,11 @@ The mechanical bar, in one place so it cannot drift. All five pass before a chan
 There is no CI: every item is on you, run locally. CodeRabbit reviews each PR, but it is a reviewer,
 not a gate. Each is expanded below; the manual sweep at the end of this file is the sixth, judged by
 what you touched.
+
+Keep checks proportional to the change and stop once there is enough evidence. Ask before running
+tests that open or activate windows, move focus, send input, or may trigger macOS permission prompts.
+This also applies to a full-suite run and to separate test apps on Marijn's live desktop.
+A requested release authorizes restarting Ollie, not additional interactive tests.
 
 ## The harnesses
 
