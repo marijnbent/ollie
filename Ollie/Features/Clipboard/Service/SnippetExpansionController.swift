@@ -15,12 +15,16 @@ final class SnippetExpansionController {
         },
         onHoverSuggestion: { [weak self] index in
             self?.selectSuggestion(at: index)
+        },
+        onCommitDraft: { [weak self] in
+            self?.commitDraft()
         }
     )
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var activeQuery: String?
+    private var draftContent: String?
     private var previousCharacter: Character?
     private var matches: [Snippet] = []
     private var selectedIndex = 0
@@ -165,6 +169,8 @@ final class SnippetExpansionController {
             selectedIndex = max(selectedIndex - 1, 0)
             refreshSuggestions()
             return true
+        case 36 where draftContent != nil, 48 where draftContent != nil: // Return, Tab
+            return commitDraft(postEvent: postEvent)
         case 36: // Return
             guard hasSuggestions,
                   let snippet = selectedSnippet,
@@ -175,7 +181,10 @@ final class SnippetExpansionController {
             return expand(snippet, postEvent: postEvent)
         case 51: // Backspace
             guard let activeQuery else { return false }
-            if activeQuery.isEmpty {
+            if let draftContent {
+                self.draftContent = draftContent.isEmpty ? nil : String(draftContent.dropLast())
+                refreshSuggestionsAsync()
+            } else if activeQuery.isEmpty {
                 cancelSession()
             } else {
                 self.activeQuery = String(activeQuery.dropLast())
@@ -194,6 +203,16 @@ final class SnippetExpansionController {
 
         guard !isTypingInsideClippie else {
             if isSessionActive {
+                cancelSession()
+            }
+            return false
+        }
+
+        if draftContent != nil {
+            if disallowedModifiers.isEmpty, SnippetExpansionPolicy.isDraftText(characters) {
+                draftContent? += characters
+                refreshSuggestionsAsync()
+            } else if event.keyCode != 51 {
                 cancelSession()
             }
             return false
@@ -222,6 +241,13 @@ final class SnippetExpansionController {
         }
 
         if event.keyCode == 51 { return false }
+
+        if characters == " ", !activeQuery.isEmpty, exactMatch(for: activeQuery) == nil {
+            draftContent = ""
+            matches = []
+            refreshSuggestionsAsync()
+            return false
+        }
 
         guard Snippet.isSupportedTriggerCharacter(characters) else {
             cancelSession()
@@ -259,12 +285,14 @@ final class SnippetExpansionController {
 
         ensureObservationTargetCurrent()
 
-        matches = store.matches(for: activeQuery)
+        matches = draftContent == nil ? store.matches(for: activeQuery) : []
         if selectedIndex >= matches.count {
             selectedIndex = max(0, matches.count - 1)
         }
+        let draft = matches.isEmpty && !activeQuery.isEmpty
+            ? SnippetDraft(trigger: activeQuery, content: draftContent) : nil
 
-        guard !matches.isEmpty else {
+        guard !matches.isEmpty || draft != nil else {
             suggestionWindowController.hide()
             return
         }
@@ -285,6 +313,7 @@ final class SnippetExpansionController {
 
         suggestionWindowController.show(
             snippets: matches,
+            draft: draft,
             selectedIndex: selectedIndex,
             anchorRect: anchorResolution.rect,
             anchorStrategy: anchorResolution.strategy
@@ -296,6 +325,7 @@ final class SnippetExpansionController {
         openingTask = nil
         openingCaretRect = nil
         activeQuery = nil
+        draftContent = nil
         matches = []
         selectedIndex = 0
         hasNavigatedSuggestions = false
@@ -322,7 +352,7 @@ final class SnippetExpansionController {
     private func selectSuggestion(at index: Int) {
         guard matches.indices.contains(index), selectedIndex != index else { return }
         selectedIndex = index
-        suggestionWindowController.update(snippets: matches, selectedIndex: selectedIndex)
+        suggestionWindowController.update(snippets: matches, draft: nil, selectedIndex: selectedIndex)
     }
 
     private func startSession() {
@@ -358,22 +388,60 @@ final class SnippetExpansionController {
     ) -> Bool {
         let trigger = ">" + (activeQuery ?? "")
         let forwardedTrigger = String(trigger.dropLast(pendingCharacterCount))
-        guard let events = TextInjector.inlineReplacementEvents(
-            deleting: forwardedTrigger.count, inserting: snippet.content
-        ) else { return false }
+        guard let replacement = replaceTypedText(forwardedTrigger, with: snippet.content, postEvent: postEvent) else {
+            return false
+        }
+        if replacement != .rejected { store.recordUsage(for: snippet.id) }
+        return true
+    }
+
+    @discardableResult
+    private func commitDraft(
+        postEvent: (CGEvent) -> Void = { $0.post(tap: .cgAnnotatedSessionEventTap) }
+    ) -> Bool {
+        guard let trigger = activeQuery, let draftContent else { return false }
+        let accessibilityDraft = focusedElement().flatMap { element -> (typed: String, content: String)? in
+            guard let value = stringAttribute(kAXValueAttribute as CFString, for: element),
+                  let range = selectedTextRange(for: element) else { return nil }
+            return SnippetExpansionPolicy.draft(
+                in: value, selectedRange: NSRange(location: range.location, length: range.length), trigger: trigger)
+        }
+        let draft = accessibilityDraft ?? (">\(trigger) \(draftContent)", draftContent)
+        let content = draft.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else {
+            cancelSession()
+            return false
+        }
+        do {
+            try store.saveSnippet(title: "", trigger: trigger, content: content)
+        } catch {
+            Diagnostics(category: "snippets").warning("Inline snippet not saved", details: error.localizedDescription)
+            cancelSession()
+            return false
+        }
+        _ = replaceTypedText(draft.typed, with: content, postEvent: postEvent)
+        return true
+    }
+
+    @discardableResult
+    private func replaceTypedText(
+        _ typed: String, with content: String, postEvent: (CGEvent) -> Void
+    ) -> AccessibilityReplacement? {
+        guard let events = TextInjector.inlineReplacementEvents(deleting: typed.count, inserting: content) else {
+            return nil
+        }
         let replacement = TextInjector.replaceInlineTriggerUsingAccessibility(
-            forwardedTrigger, with: snippet.content, in: frontmostApplication())
+            typed, with: content, in: frontmostApplication())
         cancelSession()
         if replacement == .rejected {
             Diagnostics(category: "snippets").warning("Snippet replacement target changed")
-            return true
+            return replacement
         }
         if replacement.fallsBackToEvents {
             for event in events { postEvent(event) }
         }
-        store.recordUsage(for: snippet.id)
         playInsertionSound()
-        return true
+        return replacement
     }
 
     private func caretRect(for focusedElement: AXUIElement) -> CGRect? {
@@ -1084,19 +1152,22 @@ private final class SnippetSuggestionWindowController: NSWindowController {
     private let metrics: () -> InterfaceMetrics
     private let onSelectSnippet: (Snippet) -> Void
     private let onHoverSuggestion: (Int) -> Void
+    private let onCommitDraft: () -> Void
     private let overlay = SnippetBackdropController()
 
     init(
         metrics: @escaping () -> InterfaceMetrics,
         onSelectSnippet: @escaping (Snippet) -> Void,
-        onHoverSuggestion: @escaping (Int) -> Void
+        onHoverSuggestion: @escaping (Int) -> Void,
+        onCommitDraft: @escaping () -> Void
     ) {
         self.metrics = metrics
         self.onSelectSnippet = onSelectSnippet
         self.onHoverSuggestion = onHoverSuggestion
+        self.onCommitDraft = onCommitDraft
         hostingView = NSHostingView(rootView: SnippetSuggestionListView(
-            snippets: [], selectedIndex: 0, metrics: metrics(),
-            onSelectSnippet: onSelectSnippet, onHoverSuggestion: onHoverSuggestion))
+            snippets: [], draft: nil, selectedIndex: 0, metrics: metrics(),
+            onSelectSnippet: onSelectSnippet, onHoverSuggestion: onHoverSuggestion, onCommitDraft: onCommitDraft))
         hostingView.sizingOptions = []
         let panel = SnippetPanel(
             contentRect: .zero,
@@ -1117,16 +1188,20 @@ private final class SnippetSuggestionWindowController: NSWindowController {
 
     var isVisible: Bool { window?.isVisible == true }
 
-    func show(snippets: [Snippet], selectedIndex: Int, anchorRect: CGRect, anchorStrategy: AnchorStrategy) {
-        update(snippets: snippets, selectedIndex: selectedIndex)
+    func show(
+        snippets: [Snippet], draft: SnippetDraft?, selectedIndex: Int,
+        anchorRect: CGRect, anchorStrategy: AnchorStrategy
+    ) {
+        update(snippets: snippets, draft: draft, selectedIndex: selectedIndex)
         let metrics = metrics()
         let screen = NSScreen.screens.first { $0.frame.contains(CGPoint(x: anchorRect.midX, y: anchorRect.midY)) }
             ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return }
+        let rows = snippets.map { ($0.trigger, $0.suggestionDetail) } + (draft.map { [($0.trigger, $0.detail)] } ?? [])
         let visibleFrame = screen.visibleFrame.insetBy(dx: metrics.spacing.md, dy: metrics.spacing.md)
         let size = CGSize(
-            width: min(popupWidth(for: snippets, metrics: metrics), visibleFrame.width),
-            height: min(CGFloat(min(Theme.Size.snippetVisibleRows, snippets.count)) * metrics.size.snippetRowHeight
+            width: min(popupWidth(for: rows, metrics: metrics), visibleFrame.width),
+            height: min(CGFloat(min(Theme.Size.snippetVisibleRows, rows.count)) * metrics.size.snippetRowHeight
                 + metrics.spacing.sm * 2, visibleFrame.height))
         let origin = SnippetExpansionPolicy.popupOrigin(
             anchor: anchorRect, size: size, visibleFrame: visibleFrame,
@@ -1140,12 +1215,12 @@ private final class SnippetSuggestionWindowController: NSWindowController {
         window?.orderFrontRegardless()
     }
 
-    private func popupWidth(for snippets: [Snippet], metrics: InterfaceMetrics) -> CGFloat {
+    private func popupWidth(for rows: [(trigger: String, detail: String)], metrics: InterfaceMetrics) -> CGFloat {
         let triggerFont = metrics.typography.textNSFont(.body, weight: .bold)
         let detailFont = metrics.typography.textNSFont(.body)
-        let contentWidth = snippets.map { snippet in
-            (">\(snippet.trigger)" as NSString).size(withAttributes: [.font: triggerFont]).width
-                + (snippet.suggestionDetail as NSString).size(withAttributes: [.font: detailFont]).width
+        let contentWidth = rows.map { row in
+            (row.trigger as NSString).size(withAttributes: [.font: triggerFont]).width
+                + (row.detail as NSString).size(withAttributes: [.font: detailFont]).width
                 + metrics.spacing.md
         }.max() ?? 0
         return min(metrics.size.snippetMaximumWidth,
@@ -1153,10 +1228,10 @@ private final class SnippetSuggestionWindowController: NSWindowController {
                        ceil(contentWidth) + metrics.spacing.md * 2 + metrics.spacing.sm * 2))
     }
 
-    func update(snippets: [Snippet], selectedIndex: Int) {
+    func update(snippets: [Snippet], draft: SnippetDraft?, selectedIndex: Int) {
         hostingView.rootView = SnippetSuggestionListView(
-            snippets: snippets, selectedIndex: selectedIndex, metrics: metrics(),
-            onSelectSnippet: onSelectSnippet, onHoverSuggestion: onHoverSuggestion)
+            snippets: snippets, draft: draft, selectedIndex: selectedIndex, metrics: metrics(),
+            onSelectSnippet: onSelectSnippet, onHoverSuggestion: onHoverSuggestion, onCommitDraft: onCommitDraft)
     }
 
     func hide() {
@@ -1170,19 +1245,37 @@ private final class SnippetPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+private struct SnippetDraft: Equatable {
+    let trigger: String
+    let content: String?
+
+    var detail: String {
+        guard let content else { return "Space, then type text to save" }
+        return content.isEmpty ? "Type text to save" : content.collapsedForSuggestion
+    }
+}
+
 private struct SnippetSuggestionListView: View {
     let snippets: [Snippet]
+    let draft: SnippetDraft?
     let selectedIndex: Int
     let metrics: InterfaceMetrics
     let onSelectSnippet: (Snippet) -> Void
     let onHoverSuggestion: (Int) -> Void
+    let onCommitDraft: () -> Void
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(snippets.enumerated()), id: \.element.id) { index, snippet in
-                        suggestionRow(snippet, index: index)
+                        suggestionRow(trigger: snippet.trigger, detail: snippet.suggestionDetail,
+                                      isSelected: index == selectedIndex) { onSelectSnippet(snippet) }
+                            .onHover { if $0 { onHoverSuggestion(index) } }
+                    }
+                    if let draft {
+                        suggestionRow(trigger: draft.trigger, detail: draft.detail,
+                                      isSelected: draft.content?.isEmpty == false, action: onCommitDraft)
                     }
                 }
             }
@@ -1206,35 +1299,41 @@ private struct SnippetSuggestionListView: View {
         proxy.scrollTo(snippets[selectedIndex].id)
     }
 
-    private func suggestionRow(_ snippet: Snippet, index: Int) -> some View {
+    private func suggestionRow(
+        trigger: String, detail: String, isSelected: Bool, action: @escaping () -> Void
+    ) -> some View {
         HStack(spacing: metrics.spacing.md) {
-            Text(">\(snippet.trigger)")
+            Text(trigger)
                 .font(metrics.typography.rowTitle.bold())
-                .foregroundStyle(index == selectedIndex ? Theme.Colors.snippetSelectedText : Theme.Colors.textPrimary)
+                .foregroundStyle(isSelected ? Theme.Colors.snippetSelectedText : Theme.Colors.textPrimary)
                 .layoutPriority(1)
-            Text(snippet.suggestionDetail)
+            Text(detail)
                 .font(metrics.typography.rowTitle)
-                .foregroundStyle(index == selectedIndex ? Theme.Colors.snippetSelectedText : Theme.Colors.textSecondary)
+                .foregroundStyle(isSelected ? Theme.Colors.snippetSelectedText : Theme.Colors.textSecondary)
         }
         .lineLimit(1)
         .padding(.horizontal, metrics.spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: metrics.size.snippetRowHeight)
-        .background(index == selectedIndex ? Theme.Colors.snippetSelection : .clear,
+        .background(isSelected ? Theme.Colors.snippetSelection : .clear,
                     in: RoundedRectangle(cornerRadius: metrics.radius.snippetSelection, style: .continuous))
         .contentShape(Rectangle())
-        .onHover { if $0 { onHoverSuggestion(index) } }
-        .onTapGesture { onSelectSnippet(snippet) }
+        .onTapGesture(perform: action)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { onSelectSnippet(snippet) }
+        .accessibilityAction { action() }
     }
 }
 
 private extension Snippet {
     var suggestionDetail: String {
-        let text = title.isEmpty ? content : title
-        return text.prefix(200).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        (title.isEmpty ? content : title).collapsedForSuggestion
+    }
+}
+
+private extension String {
+    var collapsedForSuggestion: String {
+        prefix(200).split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
 

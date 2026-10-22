@@ -803,7 +803,7 @@ after the caret advances past `>`, with a 32 ms fallback when AX does not report
 Tab and arrow selection remain available while opening; Escape cancels the pending display. Typed queries
 rank trigger matches ahead of title and content matches. The compact single-column HUD-glass panel
 hugs its content between `snippetMinimumWidth` (220) and `snippetMaximumWidth` (380), scaled by
-Interface Size. Each `snippetRowHeight` (34) row shows a bold trigger followed by its title or a
+Interface Size. Each `snippetRowHeight` (34) row shows a bold trigger, without its `>`, followed by its title or a
 single-line content excerpt in secondary ink. The selected row uses the window switcher's system
 selection colours and `snippetSelection` (4) corners. Outer padding is `sm` (6), row horizontal
 padding and the text gap are `md` (8), and the panel uses `menuPanel` (16) corners. Height follows the
@@ -815,6 +815,13 @@ query, or after arrow navigation on an empty query. A bare `>` followed by Retur
 and ends the session, preserving chat send behaviour. Escape dismisses, and Backspace over `>`
 ends the session while deleting the prefix normally. An exact trigger still auto-expands only when
 no other trigger extends it; title/content matches never change that decision.
+
+A typed trigger with no exact match can become a snippet in place. With no matches the picker shows a
+single row inviting Space; Space after any unmatched trigger switches to a draft row and the text
+typed after it becomes the content. Return, Tab or a click saves the snippet and replaces
+`>trigger text` with the trimmed text, which comes from the AX value when readable and otherwise from
+the tracked keystrokes. Backspace over the space returns to the query; Escape, a modifier chord or a
+navigation key leaves the text literal; Return on an empty draft passes through.
 
 The completing keystroke is consumed synchronously. `TextInjector` first replaces the already-forwarded
 trigger range through Accessibility, checking the trigger suffix before writing and reading the value

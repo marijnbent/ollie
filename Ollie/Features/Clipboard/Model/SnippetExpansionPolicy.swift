@@ -7,6 +7,23 @@ enum SnippetExpansionPolicy {
         }
     }
 
+    static func draft(
+        in value: String, selectedRange: NSRange, trigger: String
+    ) -> (typed: String, content: String)? {
+        guard selectedRange.length == 0, let caret = Range(selectedRange, in: value) else { return nil }
+        let beforeCaret = value[..<caret.lowerBound]
+        guard let start = beforeCaret.range(of: ">\(trigger) ", options: [.backwards, .caseInsensitive]) else {
+            return nil
+        }
+        return (String(beforeCaret[start.lowerBound...]), String(beforeCaret[start.upperBound...]))
+    }
+
+    static func isDraftText(_ characters: String) -> Bool {
+        !characters.isEmpty && characters.unicodeScalars.allSatisfy {
+            !CharacterSet.controlCharacters.contains($0) && !(0xF700...0xF8FF).contains($0.value)
+        }
+    }
+
     static func canStartSession(value: String?, selectedRange: NSRange?, previousCharacter: Character?) -> Bool {
         if let value, let selectedRange, let range = Range(selectedRange, in: value) {
             return value[..<range.lowerBound].last?.isWhitespace ?? true

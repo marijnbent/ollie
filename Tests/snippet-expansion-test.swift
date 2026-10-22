@@ -88,6 +88,38 @@ struct SnippetExpansionTests {
         check("generated input is ignored", !type("p", marker: Paster.ollieEventTag))
         check("generated input does not expand", editor.string.hasSuffix(">p"))
         type(" ")
+
+        func typeText(_ text: String) { for character in text { type(String(character)) } }
+        typeText(">sig")
+        check("space after an unknown trigger is forwarded", !type(" ", keyCode: 49))
+        typeText("Hi thera")
+        type("\u{8}", keyCode: 51)
+        type("e")
+        check("Return saves the inline draft", type("\r", keyCode: 36))
+        check("inline draft becomes a snippet", store.exactTriggerMatch(for: "sig")?.content == "Hi there")
+        check("inline draft replaces its trigger", editor.string.hasSuffix(">p Hi there"))
+        type(" ")
+        typeText(">tmp ")
+        type("\u{8}", keyCode: 51)
+        typeText("x ")
+        check("backspace over the draft space returns to the query", editor.string.hasSuffix(">tmpx "))
+        check("Escape abandons the draft", type("", keyCode: 53))
+        check("abandoned draft saves nothing", store.exactTriggerMatch(for: "tmp") == nil
+            && store.exactTriggerMatch(for: "tmpx") == nil)
+        type(" ")
+        type(">")
+        type("p")
+        type(" ")
+        check("space after an ambiguous exact trigger stays literal", editor.string.hasSuffix(">p "))
+        typeText(">zz ")
+        check("Return on an empty draft passes through", !type("\r", keyCode: 36))
+        check("empty draft saves nothing", store.exactTriggerMatch(for: "zz") == nil)
+        let draftValue = "Hi >Sig  Best regards"
+        let draft = SnippetExpansionPolicy.draft(
+            in: draftValue, selectedRange: NSRange(location: draftValue.utf16.count, length: 0), trigger: "sig")
+        check("AX draft keeps typed casing", draft?.typed == ">Sig  Best regards")
+        check("AX draft content follows the trigger", draft?.content == " Best regards")
+        type(" ")
         let longText = String(repeating: "  日本語 👩🏽‍💻 café\n\tSecond line\n", count: 20) + "  "
         try store.saveSnippet(title: "Long signature", trigger: "long", content: longText)
         let before = editor.string
