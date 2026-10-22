@@ -7,7 +7,15 @@ final class SnippetExpansionController {
     private let generatedEventMarker: Int64 = Paster.ollieEventTag
     private let metrics: () -> InterfaceMetrics
     private let store: SnippetStore
+    private let injector: TextInjector
     private let frontmostApplication: () -> NSRunningApplication?
+    private let replayEvent: (CGEvent) -> Void
+    private enum InlineReplacement {
+        case pasted
+        case rejected
+    }
+    private var pendingPasteID: UUID?
+    private var bufferedEvents: [CGEvent] = []
     private lazy var suggestionWindowController = SnippetSuggestionWindowController(
         metrics: metrics,
         onActivateSuggestion: { [weak self] index in
@@ -44,12 +52,16 @@ final class SnippetExpansionController {
 
     init(
         store: SnippetStore,
+        injector: TextInjector,
         metrics: @escaping () -> InterfaceMetrics = { .standard },
-        frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }
+        frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
+        replayEvent: @escaping (CGEvent) -> Void = { $0.post(tap: .cghidEventTap) }
     ) {
         self.store = store
+        self.injector = injector
         self.metrics = metrics
         self.frontmostApplication = frontmostApplication
+        self.replayEvent = replayEvent
     }
 
     var isRunning: Bool {
@@ -60,7 +72,8 @@ final class SnippetExpansionController {
     func start() {
         guard eventTap == nil else { return }
 
-        let eventMask = (1 << CGEventType.keyDown.rawValue)
+        let eventTypes: [CGEventType] = [.keyDown, .keyUp, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        let eventMask = eventTypes.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -95,6 +108,7 @@ final class SnippetExpansionController {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.cancelSession()
+                self?.cancelPendingInput()
                 self?.previousCharacter = nil
             }
         }, center: center)
@@ -102,6 +116,7 @@ final class SnippetExpansionController {
 
     func stop() {
         cancelSession()
+        cancelPendingInput()
 
         activationObserver = nil
         previousCharacter = nil
@@ -127,6 +142,16 @@ final class SnippetExpansionController {
 
         if event.getIntegerValueField(.eventSourceUserData) == generatedEventMarker {
             return Unmanaged.passUnretained(event)
+        }
+
+        if pendingPasteID != nil {
+            if type == .keyDown || type == .keyUp {
+                guard let copy = event.copy() else { return Unmanaged.passUnretained(event) }
+                bufferedEvents.append(copy)
+                return nil
+            }
+            for buffered in bufferedEvents { postEvent(buffered) }
+            cancelPendingInput()
         }
 
         guard type == .keyDown, let nsEvent = NSEvent(cgEvent: event) else {
@@ -417,7 +442,7 @@ final class SnippetExpansionController {
         guard let replacement = replaceTypedText(forwardedTrigger, with: snippet.content, postEvent: postEvent) else {
             return false
         }
-        if replacement != .rejected { store.recordUsage(for: snippet.id) }
+        if replacement == .pasted { store.recordUsage(for: snippet.id) }
         return true
     }
 
@@ -452,22 +477,32 @@ final class SnippetExpansionController {
     @discardableResult
     private func replaceTypedText(
         _ typed: String, with content: String, postEvent: (CGEvent) -> Void
-    ) -> AccessibilityReplacement? {
-        guard let events = TextInjector.inlineReplacementEvents(deleting: typed.count, inserting: content) else {
+    ) -> InlineReplacement? {
+        let target = frontmostApplication()
+        cancelSession()
+        guard TextInjector.inlineTriggerIsValid(typed, in: target) else {
+            Diagnostics(category: "snippets").warning("Snippet replacement target changed")
+            return .rejected
+        }
+        let pasteID = UUID()
+        pendingPasteID = pasteID
+        guard injector.pasteInline(content, deleting: typed.count, postEvent: postEvent, onFinished: { [weak self] in
+            guard let self, pendingPasteID == pasteID else { return }
+            let events = bufferedEvents
+            cancelPendingInput()
+            guard frontmostApplication()?.processIdentifier == target?.processIdentifier else { return }
+            for event in events { replayEvent(event) }
+        }) else {
+            cancelPendingInput()
             return nil
         }
-        let replacement = TextInjector.replaceInlineTriggerUsingAccessibility(
-            typed, with: content, in: frontmostApplication())
-        cancelSession()
-        if replacement == .rejected {
-            Diagnostics(category: "snippets").warning("Snippet replacement target changed")
-            return replacement
-        }
-        if replacement.fallsBackToEvents {
-            for event in events { postEvent(event) }
-        }
         playInsertionSound()
-        return replacement
+        return .pasted
+    }
+
+    private func cancelPendingInput() {
+        pendingPasteID = nil
+        bufferedEvents.removeAll()
     }
 
     private func caretRect(for focusedElement: AXUIElement) -> CGRect? {

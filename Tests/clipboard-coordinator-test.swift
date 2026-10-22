@@ -133,6 +133,7 @@ struct ClipboardCoordinatorTests {
 }
 
 @MainActor final class AppCore {
+    let textInjector = TestTextInjector()
     let settings = TestSettings()
     let appIndex = TestAppIndex()
     let palette = TestPalette()
@@ -196,10 +197,12 @@ enum DialogTone { case success, danger, neutral }
 
 @MainActor final class SnippetExpansionController {
     var isRunning = false
-    init(store: SnippetStore) {}
+    init(store: SnippetStore, injector: TestTextInjector) {}
     func stop() { isRunning = false }
     func start() { isRunning = true }
 }
+
+@MainActor final class TestTextInjector {}
 
 struct SnippetEditorTarget {
     let snippet: Snippet?

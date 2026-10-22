@@ -10,7 +10,7 @@ final class ClipboardCoordinator: HealthCheckable {
     let watcher: ClipboardWatcher
     private unowned let core: AppCore
     private let ticker: HealthTicker
-    @ObservationIgnored private lazy var expansion = SnippetExpansionController(store: snippets)
+    @ObservationIgnored private lazy var expansion = SnippetExpansionController(store: snippets, injector: core.textInjector)
     let searchSession = ClipboardSearchSession()
     var expandedImage: ClipboardItem?
     var snippetEditor: SnippetEditorTarget?
