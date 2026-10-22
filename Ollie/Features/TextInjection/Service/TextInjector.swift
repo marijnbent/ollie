@@ -72,12 +72,18 @@ final class DeliveryCompletion {
 final class TextInjector {
 
     private let deliveryQueue: DeliveryQueue
+    private let pasteboard: any PasteboardAccess
+    private let inlinePasteDelay: Duration
     private var activePasteboardLease: TemporaryPasteboardLease?
 
     init(
-        deliveryQueue: DeliveryQueue = DeliveryQueue()
+        deliveryQueue: DeliveryQueue = DeliveryQueue(),
+        pasteboard: any PasteboardAccess = NSPasteboard.general,
+        inlinePasteDelay: Duration = .milliseconds(400)
     ) {
         self.deliveryQueue = deliveryQueue
+        self.pasteboard = pasteboard
+        self.inlinePasteDelay = inlinePasteDelay
     }
 
     /// A paste is still in flight, or we still hold the pasteboard it borrowed.
@@ -292,7 +298,7 @@ final class TextInjector {
 
     private func beginTemporaryPasteboardLease(_ text: String) -> TemporaryPasteboardLease? {
         return TemporaryPasteboardLease.begin(
-            text: text, pasteboard: NSPasteboard.general)
+            text: text, pasteboard: pasteboard)
     }
 
     @discardableResult
@@ -372,12 +378,10 @@ final class TextInjector {
     /// Rule 1: a renderer surface answers about its own model, so it is never written to over AX.
     private static func replaceUsingAccessibility(
         _ text: String,
-        targetApp: NSRunningApplication?,
-        replacingSuffix: String? = nil
+        targetApp: NSRunningApplication?
     ) -> AccessibilityReplacement {
         guard let targetApp else { return .unavailable }
-        let state = Self.inspectAccessibilityTarget(
-            in: targetApp, replacingSuffix: replacingSuffix)
+        let state = Self.inspectAccessibilityTarget(in: targetApp)
         guard case .ready(let target) = state else {
             if case .rejected = state { return .rejected }
             return .unavailable
@@ -564,10 +568,46 @@ final class TextInjector {
         return AccessibilityText.selection(in: targetApp)
     }
 
-    static func replaceInlineTriggerUsingAccessibility(
-        _ trigger: String, with text: String, in targetApp: NSRunningApplication?
-    ) -> AccessibilityReplacement {
-        replaceUsingAccessibility(text, targetApp: targetApp, replacingSuffix: trigger)
+    static func inlineTriggerIsValid(_ trigger: String, in targetApp: NSRunningApplication?) -> Bool {
+        guard let targetApp else { return true }
+        if case .rejected = inspectAccessibilityTarget(in: targetApp, replacingSuffix: trigger) { return false }
+        return true
+    }
+
+    func pasteInline(
+        _ text: String,
+        deleting characterCount: Int,
+        postEvent: (CGEvent) -> Void,
+        onFinished: @escaping @MainActor () -> Void
+    ) -> Bool {
+        guard deliveryQueue.isIdle, finishPendingPasteboardOwnership(),
+              let events = Self.inlinePasteEvents(deleting: characterCount),
+              let lease = beginTemporaryPasteboardLease(text) else { return false }
+        activePasteboardLease = lease
+        deliveryQueue.enqueue { [weak self] in
+            guard let self else {
+                _ = lease.restoreIfOwned()
+                onFinished()
+                return
+            }
+            _ = await wait(for: inlinePasteDelay)
+            finish(lease)
+            onFinished()
+        }
+        for event in events { postEvent(event) }
+        return true
+    }
+
+    static func inlinePasteEvents(deleting characterCount: Int) -> [CGEvent]? {
+        guard let deletions = inlineReplacementEvents(deleting: characterCount, inserting: ""),
+              let down = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false)
+        else { return nil }
+        for event in [down, up] {
+            event.flags = .maskCommand
+            tag(event)
+        }
+        return deletions + [down, up]
     }
 
     static func inlineReplacementEvents(deleting characterCount: Int, inserting text: String) -> [CGEvent]? {
@@ -838,7 +878,8 @@ struct PasteboardSnapshot {
     /// A kept `public.html` is the flavour a Chromium editor prefers, so we lend the text alone.
     static func temporaryItem(carrying text: String) -> NSPasteboardItem? {
         let item = NSPasteboardItem()
-        guard item.setString(text, forType: .string)
+        guard item.setString(text, forType: .string),
+              item.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
         else { return nil }
         return item
     }

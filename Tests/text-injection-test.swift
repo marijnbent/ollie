@@ -9,6 +9,7 @@ struct TextInjectionTests {
         board.setString("original", forType: .string)
         let lease = TemporaryPasteboardLease.begin(text: "replacement", pasteboard: board)!
         precondition(board.string(forType: .string) == "replacement")
+        precondition(board.types?.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType")) == true)
         guard case .restored = lease.restoreIfOwned() else { preconditionFailure("restore failed") }
         precondition(board.string(forType: .string) == "original")
         let superseded = TemporaryPasteboardLease.begin(text: "temporary", pasteboard: board)!
@@ -16,6 +17,42 @@ struct TextInjectionTests {
         board.setString("new user copy", forType: .string)
         precondition(superseded.restoreIfOwned() == .superseded)
         precondition(board.string(forType: .string) == "new user copy")
+
+        let original = NSPasteboardItem()
+        original.setString("rich clipboard", forType: .string)
+        let richText = Data("{\\rtf1\\ansi rich clipboard}".utf8)
+        original.setData(richText, forType: .rtf)
+        board.clearContents()
+        board.writeObjects([original])
+        let pasteQueue = DeliveryQueue()
+        let injector = TextInjector(deliveryQueue: pasteQueue, pasteboard: board, inlinePasteDelay: .zero)
+        var posted: [CGEvent] = []
+        var pasted: [String] = []
+        var finished = false
+        precondition(TextInjector.inlinePasteEvents(deleting: 3) != nil, "paste events can be constructed")
+        precondition(PasteboardSnapshot(pasteboard: board) != nil, "rich clipboard can be preserved")
+        precondition(injector.pasteInline("marijn@marijnbent.nl", deleting: 3, postEvent: { event in
+            posted.append(event)
+            if event.type == .keyDown, event.getIntegerValueField(.keyboardEventKeycode) == 9 {
+                pasted.append(board.string(forType: .string) ?? "")
+            }
+        }, onFinished: { finished = true }))
+        precondition(posted.filter { $0.type == .keyDown }.map {
+            $0.getIntegerValueField(.keyboardEventKeycode)
+        } == [51, 51, 51, 9])
+        precondition(pasted == ["marijn@marijnbent.nl"] && !finished)
+        precondition(!injector.pasteInline("overlap", deleting: 1, postEvent: { _ in
+            preconditionFailure("overlapping paste posted input")
+        }, onFinished: {}))
+        await pasteQueue.drain()
+        precondition(finished && !injector.isDelivering)
+        precondition(board.string(forType: .string) == "rich clipboard")
+        precondition(board.data(forType: .rtf) == richText)
+        precondition(injector.pasteInline("temporary", deleting: 0, postEvent: { _ in }, onFinished: {}))
+        board.clearContents()
+        board.setString("copied during paste", forType: .string)
+        await pasteQueue.drain()
+        precondition(board.string(forType: .string) == "copied during paste")
 
         let text = "a👨‍👩‍👧‍👦é日本語"
         let chunks = UnicodeTypingChunk.split(text)

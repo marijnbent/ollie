@@ -13,7 +13,13 @@ struct SnippetExpansionTests {
         let store = SnippetStore(defaults: defaults)
         try store.saveSnippet(title: "", trigger: "p", content: "pr+merge")
         try store.saveSnippet(title: "", trigger: "fi", content: "Investigate. ")
-        let controller = SnippetExpansionController(store: store, frontmostApplication: { nil })
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        board.setString("original clipboard", forType: .string)
+        let injector = TextInjector(pasteboard: board, inlinePasteDelay: .zero)
+        var replayed: [CGEvent] = []
+        let controller = SnippetExpansionController(
+            store: store, injector: injector, frontmostApplication: { nil }, replayEvent: { replayed.append($0) })
         defer { controller.stop() }
         let editor = NSTextView()
         var generated: [CGEvent] = []
@@ -21,7 +27,9 @@ struct SnippetExpansionTests {
 
         func deliver(_ event: CGEvent) {
             guard event.type == .keyDown, let key = NSEvent(cgEvent: event) else { return }
-            if key.keyCode == 51 {
+            if key.keyCode == 9, key.modifierFlags.contains(.command) {
+                editor.insertText(board.string(forType: .string) ?? "", replacementRange: editor.selectedRange())
+            } else if key.keyCode == 51 {
                 editor.deleteBackward(nil)
             } else {
                 editor.keyDown(with: key)
@@ -29,7 +37,7 @@ struct SnippetExpansionTests {
         }
 
         @discardableResult
-        func type(_ text: String, keyCode: CGKeyCode = 0, marker: Int64 = 0) -> Bool {
+        func type(_ text: String, keyCode: CGKeyCode = 0, marker: Int64 = 0, waitForPaste: Bool = true) -> Bool {
             let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true)!
             let characters = Array(text.utf16)
             event.keyboardSetUnicodeString(stringLength: characters.count, unicodeString: characters)
@@ -45,6 +53,12 @@ struct SnippetExpansionTests {
                 }
             }
             if let forwarded { deliver(forwarded.takeUnretainedValue()) }
+            if waitForPaste {
+                let deadline = Date().addingTimeInterval(1)
+                while injector.isDelivering, Date() < deadline {
+                    RunLoop.main.run(until: Date().addingTimeInterval(0.001))
+                }
+            }
             return forwarded == nil
         }
 
@@ -56,9 +70,14 @@ struct SnippetExpansionTests {
         check("short trigger deletes only the forwarded prefix", generated.filter {
             $0.type == .keyDown && $0.getIntegerValueField(.keyboardEventKeycode) == 51
         }.count == 1)
-        check("replacement events are tagged and have no modifiers", generated.allSatisfy {
-            $0.getIntegerValueField(.eventSourceUserData) == Paster.ollieEventTag && $0.flags.isEmpty
+        check("replacement events are tagged with only the paste shortcut modified", generated.allSatisfy {
+            $0.getIntegerValueField(.eventSourceUserData) == Paster.ollieEventTag
+                && $0.flags == ($0.getIntegerValueField(.keyboardEventKeycode) == 9 ? .maskCommand : [])
         })
+        check("short expansion posts exactly one paste", generated.filter {
+            $0.type == .keyDown && $0.getIntegerValueField(.keyboardEventKeycode) == 9
+        }.count == 1)
+        check("expansion restores the previous clipboard", board.string(forType: .string) == "original clipboard")
         type("x")
         check("following keystroke stays after replacement", editor.string == "Keep this pr+mergex")
 
@@ -142,19 +161,16 @@ struct SnippetExpansionTests {
         let longText = String(repeating: "  日本語 👩🏽‍💻 café\n\tSecond line\n", count: 20) + "  "
         try store.saveSnippet(title: "Long signature", trigger: "long", content: longText)
         let before = editor.string
+        let beforeLongEvents = generated.count
         type(">")
         type("l")
         type("o")
         type("n")
         check("long completion is consumed", type("g"))
         check("long multiline Unicode arrives intact", editor.string == before + longText)
-        check("Unicode events stay within the renderer limit", generated.filter {
+        check("snippet text never uses Unicode key events", generated.dropFirst(beforeLongEvents).filter {
             $0.type == .keyDown && $0.getIntegerValueField(.keyboardEventKeycode) == 0
-        }.allSatisfy { event in
-            var length = 0
-            event.keyboardGetUnicodeString(maxStringLength: 0, actualStringLength: &length, unicodeString: nil)
-            return length <= UnicodeTypingChunk.maxUTF16Units
-        })
+        }.isEmpty)
         check("title matching is available", store.matches(for: "signature").first?.trigger == "long")
         try store.saveSnippet(title: "longer title", trigger: "other", content: "Title-only match")
         let exact = store.exactTriggerMatch(for: "long")!
@@ -280,6 +296,24 @@ struct SnippetExpansionTests {
         controller.stop()
         RunLoop.main.run(until: Date().addingTimeInterval(0.08))
         check("stop cancels the pending display", popup()?.isVisible == false)
+
+        editor.string = ""
+        editor.setSelectedRange(NSRange(location: 0, length: 0))
+        try store.saveSnippet(title: "", trigger: "mar", content: "marijn@marijnbent.nl")
+        type(">")
+        type("m")
+        type("a")
+        check("paste begins before further typing", type("r", waitForPaste: false))
+        check("following typing waits while the clipboard is borrowed", type("x", waitForPaste: false))
+        check("the entire email arrives before following input", editor.string == "marijn@marijnbent.nl")
+        let deadline = Date().addingTimeInterval(1)
+        while injector.isDelivering, Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.001))
+        }
+        check("one following key is replayed", replayed.count == 1)
+        for event in replayed { deliver(event) }
+        check("replayed typing follows the complete paste", editor.string == "marijn@marijnbent.nlx")
+        check("clipboard is restored before input resumes", board.string(forType: .string) == "original clipboard")
 
         let result = failures == 0 ? "PASS: snippet event ordering, insertion, boundaries, placement and empty-query suggestions"
             : "FAIL: \(failures) snippet checks"

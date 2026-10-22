@@ -92,7 +92,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `palette-navigation-test` | `Palette/PaletteState.swift`'s screen motions — `prepare`, `replace`, `push`, `pop` |
 | `palette-selection-test` | `Features/PaletteRowIndex.swift` |
 | `clipboard-coordinator-test` | Feature-specific operation cancellation, pending OCR completion, editor cancellation, and selection during asynchronous refreshes |
-| `snippet-expansion-test` | Actual snippet key handler and native text editing: completing-key suppression, ordered replacement, preceding text, ambiguous prefixes, backspace, and generated input |
+| `snippet-expansion-test` | Actual snippet key handler and native text editing: completing-key suppression, single-paste replacement, buffered typing, preceding text, ambiguous prefixes, backspace, and generated input |
 | `interface-size-test` | `DesignSystem/InterfaceMetrics.swift`, `Features/Settings/InterfaceSize.swift`, `Extensions/Model/ExtensionFormMetrics.swift` |
 | `palette-surface-test` | Unified launcher and clipboard sizing, stable anchors across modes, and continuous panel geometry |
 | `palette-placement-test` | `DesignSystem/Theme.swift`, `Palette/PalettePlacement.swift` |
@@ -110,7 +110,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `uninstall-test` | all five pure files in `Uninstall/Model/` |
 | `quicklink-template-test` | Current clipboard and selection expansion, URL encoding, arguments, dates and UUIDs |
 | `snippet-expansion-test` | Event-tap consumption and ordering, long multiline insertion, trigger boundaries, title matching, primary-screen AX conversion, popup clamping, deferred opening, cancellation, ranking and keys, and inline snippet drafts |
-| `text-injection-test` | Private pasteboard restoration and ownership, Unicode delivery chunks, replacement confirmation and queue ordering |
+| `text-injection-test` | Private pasteboard restoration and ownership, single-paste inline delivery, Unicode delivery chunks, replacement confirmation and queue ordering |
 | `quicklink-test` | all of `Quicklinks/Model/` |
 | `quicklink-coordinator-test` | Quicklink opening and inline argument focus — missing selection, manual input, clipboard fallback and default-app overrides; no platform effects |
 | `apple-shortcut-test` | all of `AppleShortcuts/Model/` — the `shortcuts list` parser and entry ids |
@@ -680,6 +680,15 @@ tccutil reset Accessibility nl.bentjes.fredie.dev 2>/dev/null || true
   writing into the stable app's directory is a defect even though the data is disposable
 
 ## Ollie integration
+
+Inline snippets delete the forwarded trigger and send one paste shortcut. The shared text injector
+temporarily borrows the clipboard for 400 ms, restores all original clipboard formats if it still owns
+the clipboard, and leaves a newer copy untouched. Temporary snippet content is marked transient so it
+does not enter clipboard history. Following key events wait until the clipboard is restored; changing
+applications cancels pending replay, and a mouse click flushes buffered input before the click.
+Verify repeated fast `>mar` expansions in Helium, including typing immediately afterward, and check
+that the full email and the original clipboard survive. Harnesses use a private pasteboard and a
+native text editor; they do not prove browser delivery.
 
 The `ollie-*-test` harnesses exercise imported services, clipboard storage, serialized AX work,
 recording cancellation and reconnect, and verified paste restoration with synthetic files and fake
