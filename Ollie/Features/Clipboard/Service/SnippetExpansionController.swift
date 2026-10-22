@@ -10,14 +10,12 @@ final class SnippetExpansionController {
     private let frontmostApplication: () -> NSRunningApplication?
     private lazy var suggestionWindowController = SnippetSuggestionWindowController(
         metrics: metrics,
-        onSelectSnippet: { [weak self] snippet in
-            self?.expand(snippet)
+        onActivateSuggestion: { [weak self] index in
+            guard let self, suggestions.indices.contains(index) else { return }
+            activate(suggestions[index])
         },
         onHoverSuggestion: { [weak self] index in
             self?.selectSuggestion(at: index)
-        },
-        onCommitDraft: { [weak self] in
-            self?.commitDraft()
         }
     )
 
@@ -26,7 +24,7 @@ final class SnippetExpansionController {
     private var activeQuery: String?
     private var draftContent: String?
     private var previousCharacter: Character?
-    private var matches: [Snippet] = []
+    private var suggestions: [SnippetSuggestion] = []
     private var selectedIndex = 0
     private var hasNavigatedSuggestions = false
     private var openingTask: Task<Void, Never>?
@@ -160,7 +158,7 @@ final class SnippetExpansionController {
         case 125: // Down
             guard hasSuggestions else { return false }
             hasNavigatedSuggestions = true
-            selectedIndex = min(selectedIndex + 1, matches.count - 1)
+            selectedIndex = min(selectedIndex + 1, suggestions.count - 1)
             refreshSuggestions()
             return true
         case 126: // Up
@@ -173,12 +171,12 @@ final class SnippetExpansionController {
             return commitDraft(postEvent: postEvent)
         case 36: // Return
             guard hasSuggestions,
-                  let snippet = selectedSnippet,
+                  let suggestion = selectedSuggestion,
                   shouldCommitSnippetSelectionOnReturn else { return false }
-            return expand(snippet, postEvent: postEvent)
+            return activate(suggestion, postEvent: postEvent)
         case 48: // Tab
-            guard hasSuggestions, let snippet = selectedSnippet else { return false }
-            return expand(snippet, postEvent: postEvent)
+            guard hasSuggestions, let suggestion = selectedSuggestion else { return false }
+            return activate(suggestion, postEvent: postEvent)
         case 51: // Backspace
             guard let activeQuery else { return false }
             if let draftContent {
@@ -243,9 +241,7 @@ final class SnippetExpansionController {
         if event.keyCode == 51 { return false }
 
         if characters == " ", !activeQuery.isEmpty, exactMatch(for: activeQuery) == nil {
-            draftContent = ""
-            matches = []
-            refreshSuggestionsAsync()
+            beginDraft()
             return false
         }
 
@@ -285,14 +281,12 @@ final class SnippetExpansionController {
 
         ensureObservationTargetCurrent()
 
-        matches = draftContent == nil ? store.matches(for: activeQuery) : []
-        if selectedIndex >= matches.count {
-            selectedIndex = max(0, matches.count - 1)
+        suggestions = makeSuggestions(for: activeQuery)
+        if selectedIndex >= suggestions.count {
+            selectedIndex = max(0, suggestions.count - 1)
         }
-        let draft = matches.isEmpty && !activeQuery.isEmpty
-            ? SnippetDraft(trigger: activeQuery, content: draftContent) : nil
 
-        guard !matches.isEmpty || draft != nil else {
+        guard !suggestions.isEmpty else {
             suggestionWindowController.hide()
             return
         }
@@ -312,8 +306,7 @@ final class SnippetExpansionController {
         logAnchorResolutionIfNeeded(anchorResolution)
 
         suggestionWindowController.show(
-            snippets: matches,
-            draft: draft,
+            suggestions: suggestions,
             selectedIndex: selectedIndex,
             anchorRect: anchorResolution.rect,
             anchorStrategy: anchorResolution.strategy
@@ -326,7 +319,7 @@ final class SnippetExpansionController {
         openingCaretRect = nil
         activeQuery = nil
         draftContent = nil
-        matches = []
+        suggestions = []
         selectedIndex = 0
         hasNavigatedSuggestions = false
         sessionAnchorRect = nil
@@ -341,23 +334,56 @@ final class SnippetExpansionController {
     }
 
     private var hasSuggestions: Bool {
-        !matches.isEmpty && (openingTask != nil || suggestionWindowController.isVisible)
+        !suggestions.isEmpty && (openingTask != nil || suggestionWindowController.isVisible)
     }
 
-    private var selectedSnippet: Snippet? {
-        guard matches.indices.contains(selectedIndex) else { return nil }
-        return matches[selectedIndex]
+    private var selectedSuggestion: SnippetSuggestion? {
+        guard suggestions.indices.contains(selectedIndex) else { return nil }
+        return suggestions[selectedIndex]
+    }
+
+    private func makeSuggestions(for query: String) -> [SnippetSuggestion] {
+        if let draftContent { return [.draft(SnippetDraft(trigger: query, content: draftContent))] }
+        let snippets = store.matches(for: query).map(SnippetSuggestion.snippet)
+        guard !query.isEmpty, exactMatch(for: query) == nil else { return snippets }
+        let create = SnippetSuggestion.draft(SnippetDraft(trigger: query, content: nil))
+        return store.expansionMatches(for: query).isEmpty ? [create] + snippets : snippets + [create]
     }
 
     private func selectSuggestion(at index: Int) {
-        guard matches.indices.contains(index), selectedIndex != index else { return }
+        guard suggestions.indices.contains(index), selectedIndex != index else { return }
         selectedIndex = index
-        suggestionWindowController.update(snippets: matches, draft: nil, selectedIndex: selectedIndex)
+        suggestionWindowController.update(suggestions: suggestions, selectedIndex: selectedIndex)
+    }
+
+    @discardableResult
+    private func activate(
+        _ suggestion: SnippetSuggestion,
+        postEvent: (CGEvent) -> Void = { $0.post(tap: .cgAnnotatedSessionEventTap) }
+    ) -> Bool {
+        switch suggestion {
+        case .snippet(let snippet):
+            return expand(snippet, postEvent: postEvent)
+        case .draft(let draft) where draft.content == nil:
+            guard let space = TextInjector.inlineReplacementEvents(deleting: 0, inserting: " ") else { return false }
+            beginDraft()
+            for event in space { postEvent(event) }
+            return true
+        case .draft:
+            return commitDraft(postEvent: postEvent)
+        }
+    }
+
+    private func beginDraft() {
+        draftContent = ""
+        selectedIndex = 0
+        suggestions = makeSuggestions(for: activeQuery ?? "")
+        refreshSuggestionsAsync()
     }
 
     private func startSession() {
         activeQuery = ""
-        matches = store.matches(for: "")
+        suggestions = makeSuggestions(for: "")
         selectedIndex = 0
         hasNavigatedSuggestions = false
         sessionAnchorRect = nil
@@ -1150,24 +1176,21 @@ private enum AccessibilityActivationMode: String {
 private final class SnippetSuggestionWindowController: NSWindowController {
     private let hostingView: NSHostingView<SnippetSuggestionListView>
     private let metrics: () -> InterfaceMetrics
-    private let onSelectSnippet: (Snippet) -> Void
+    private let onActivateSuggestion: (Int) -> Void
     private let onHoverSuggestion: (Int) -> Void
-    private let onCommitDraft: () -> Void
     private let overlay = SnippetBackdropController()
 
     init(
         metrics: @escaping () -> InterfaceMetrics,
-        onSelectSnippet: @escaping (Snippet) -> Void,
-        onHoverSuggestion: @escaping (Int) -> Void,
-        onCommitDraft: @escaping () -> Void
+        onActivateSuggestion: @escaping (Int) -> Void,
+        onHoverSuggestion: @escaping (Int) -> Void
     ) {
         self.metrics = metrics
-        self.onSelectSnippet = onSelectSnippet
+        self.onActivateSuggestion = onActivateSuggestion
         self.onHoverSuggestion = onHoverSuggestion
-        self.onCommitDraft = onCommitDraft
         hostingView = NSHostingView(rootView: SnippetSuggestionListView(
-            snippets: [], draft: nil, selectedIndex: 0, metrics: metrics(),
-            onSelectSnippet: onSelectSnippet, onHoverSuggestion: onHoverSuggestion, onCommitDraft: onCommitDraft))
+            suggestions: [], selectedIndex: 0, metrics: metrics(),
+            onActivateSuggestion: onActivateSuggestion, onHoverSuggestion: onHoverSuggestion))
         hostingView.sizingOptions = []
         let panel = SnippetPanel(
             contentRect: .zero,
@@ -1189,19 +1212,17 @@ private final class SnippetSuggestionWindowController: NSWindowController {
     var isVisible: Bool { window?.isVisible == true }
 
     func show(
-        snippets: [Snippet], draft: SnippetDraft?, selectedIndex: Int,
-        anchorRect: CGRect, anchorStrategy: AnchorStrategy
+        suggestions: [SnippetSuggestion], selectedIndex: Int, anchorRect: CGRect, anchorStrategy: AnchorStrategy
     ) {
-        update(snippets: snippets, draft: draft, selectedIndex: selectedIndex)
+        update(suggestions: suggestions, selectedIndex: selectedIndex)
         let metrics = metrics()
         let screen = NSScreen.screens.first { $0.frame.contains(CGPoint(x: anchorRect.midX, y: anchorRect.midY)) }
             ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return }
-        let rows = snippets.map { ($0.trigger, $0.suggestionDetail) } + (draft.map { [($0.trigger, $0.detail)] } ?? [])
         let visibleFrame = screen.visibleFrame.insetBy(dx: metrics.spacing.md, dy: metrics.spacing.md)
         let size = CGSize(
-            width: min(popupWidth(for: rows, metrics: metrics), visibleFrame.width),
-            height: min(CGFloat(min(Theme.Size.snippetVisibleRows, rows.count)) * metrics.size.snippetRowHeight
+            width: min(popupWidth(for: suggestions, metrics: metrics), visibleFrame.width),
+            height: min(CGFloat(min(Theme.Size.snippetVisibleRows, suggestions.count)) * metrics.size.snippetRowHeight
                 + metrics.spacing.sm * 2, visibleFrame.height))
         let origin = SnippetExpansionPolicy.popupOrigin(
             anchor: anchorRect, size: size, visibleFrame: visibleFrame,
@@ -1215,12 +1236,13 @@ private final class SnippetSuggestionWindowController: NSWindowController {
         window?.orderFrontRegardless()
     }
 
-    private func popupWidth(for rows: [(trigger: String, detail: String)], metrics: InterfaceMetrics) -> CGFloat {
+    private func popupWidth(for suggestions: [SnippetSuggestion], metrics: InterfaceMetrics) -> CGFloat {
         let triggerFont = metrics.typography.textNSFont(.body, weight: .bold)
         let detailFont = metrics.typography.textNSFont(.body)
-        let contentWidth = rows.map { row in
-            (row.trigger as NSString).size(withAttributes: [.font: triggerFont]).width
-                + (row.detail as NSString).size(withAttributes: [.font: detailFont]).width
+        let contentWidth = suggestions.map { suggestion in
+            (suggestion.isDraft ? triggerFont.pointSize + metrics.spacing.sm : 0)
+                + (suggestion.trigger as NSString).size(withAttributes: [.font: triggerFont]).width
+                + (suggestion.detail as NSString).size(withAttributes: [.font: detailFont]).width
                 + metrics.spacing.md
         }.max() ?? 0
         return min(metrics.size.snippetMaximumWidth,
@@ -1228,10 +1250,10 @@ private final class SnippetSuggestionWindowController: NSWindowController {
                        ceil(contentWidth) + metrics.spacing.md * 2 + metrics.spacing.sm * 2))
     }
 
-    func update(snippets: [Snippet], draft: SnippetDraft?, selectedIndex: Int) {
+    func update(suggestions: [SnippetSuggestion], selectedIndex: Int) {
         hostingView.rootView = SnippetSuggestionListView(
-            snippets: snippets, draft: draft, selectedIndex: selectedIndex, metrics: metrics(),
-            onSelectSnippet: onSelectSnippet, onHoverSuggestion: onHoverSuggestion, onCommitDraft: onCommitDraft)
+            suggestions: suggestions, selectedIndex: selectedIndex, metrics: metrics(),
+            onActivateSuggestion: onActivateSuggestion, onHoverSuggestion: onHoverSuggestion)
     }
 
     func hide() {
@@ -1245,37 +1267,58 @@ private final class SnippetPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-private struct SnippetDraft: Equatable {
+private struct SnippetDraft {
     let trigger: String
     let content: String?
+}
+
+private enum SnippetSuggestion: Identifiable {
+    case snippet(Snippet)
+    case draft(SnippetDraft)
+
+    var id: String {
+        switch self {
+        case .snippet(let snippet): snippet.id.uuidString
+        case .draft: "draft"
+        }
+    }
+
+    var isDraft: Bool {
+        if case .draft = self { return true }
+        return false
+    }
+
+    var trigger: String {
+        switch self {
+        case .snippet(let snippet): snippet.trigger
+        case .draft(let draft): draft.trigger
+        }
+    }
 
     var detail: String {
-        guard let content else { return "Space, then type text to save" }
-        return content.isEmpty ? "Type text to save" : content.collapsedForSuggestion
+        switch self {
+        case .snippet(let snippet):
+            return (snippet.title.isEmpty ? snippet.content : snippet.title).collapsedForSuggestion
+        case .draft(let draft):
+            guard let content = draft.content else { return "New snippet" }
+            return content.isEmpty ? "Type text to save" : content.collapsedForSuggestion
+        }
     }
 }
 
 private struct SnippetSuggestionListView: View {
-    let snippets: [Snippet]
-    let draft: SnippetDraft?
+    let suggestions: [SnippetSuggestion]
     let selectedIndex: Int
     let metrics: InterfaceMetrics
-    let onSelectSnippet: (Snippet) -> Void
+    let onActivateSuggestion: (Int) -> Void
     let onHoverSuggestion: (Int) -> Void
-    let onCommitDraft: () -> Void
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(snippets.enumerated()), id: \.element.id) { index, snippet in
-                        suggestionRow(trigger: snippet.trigger, detail: snippet.suggestionDetail,
-                                      isSelected: index == selectedIndex) { onSelectSnippet(snippet) }
-                            .onHover { if $0 { onHoverSuggestion(index) } }
-                    }
-                    if let draft {
-                        suggestionRow(trigger: draft.trigger, detail: draft.detail,
-                                      isSelected: draft.content?.isEmpty == false, action: onCommitDraft)
+                    ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                        suggestionRow(suggestion, index: index)
                     }
                 }
             }
@@ -1283,7 +1326,7 @@ private struct SnippetSuggestionListView: View {
             .onChange(of: selectedIndex) {
                 revealSelection(using: proxy)
             }
-            .onChange(of: snippets.map(\.id)) {
+            .onChange(of: suggestions.map(\.id)) {
                 revealSelection(using: proxy)
             }
             .onAppear { revealSelection(using: proxy) }
@@ -1295,19 +1338,24 @@ private struct SnippetSuggestionListView: View {
     }
 
     private func revealSelection(using proxy: ScrollViewProxy) {
-        guard snippets.indices.contains(selectedIndex) else { return }
-        proxy.scrollTo(snippets[selectedIndex].id)
+        guard suggestions.indices.contains(selectedIndex) else { return }
+        proxy.scrollTo(suggestions[selectedIndex].id)
     }
 
-    private func suggestionRow(
-        trigger: String, detail: String, isSelected: Bool, action: @escaping () -> Void
-    ) -> some View {
-        HStack(spacing: metrics.spacing.md) {
-            Text(trigger)
-                .font(metrics.typography.rowTitle.bold())
-                .foregroundStyle(isSelected ? Theme.Colors.snippetSelectedText : Theme.Colors.textPrimary)
-                .layoutPriority(1)
-            Text(detail)
+    private func suggestionRow(_ suggestion: SnippetSuggestion, index: Int) -> some View {
+        let isSelected = index == selectedIndex
+        return HStack(spacing: metrics.spacing.md) {
+            HStack(spacing: metrics.spacing.sm) {
+                if suggestion.isDraft {
+                    Image(systemName: "plus")
+                        .accessibilityLabel("New snippet")
+                }
+                Text(suggestion.trigger)
+            }
+            .font(metrics.typography.rowTitle.bold())
+            .foregroundStyle(isSelected ? Theme.Colors.snippetSelectedText : Theme.Colors.textPrimary)
+            .layoutPriority(1)
+            Text(suggestion.detail)
                 .font(metrics.typography.rowTitle)
                 .foregroundStyle(isSelected ? Theme.Colors.snippetSelectedText : Theme.Colors.textSecondary)
         }
@@ -1318,16 +1366,11 @@ private struct SnippetSuggestionListView: View {
         .background(isSelected ? Theme.Colors.snippetSelection : .clear,
                     in: RoundedRectangle(cornerRadius: metrics.radius.snippetSelection, style: .continuous))
         .contentShape(Rectangle())
-        .onTapGesture(perform: action)
+        .onHover { if $0 { onHoverSuggestion(index) } }
+        .onTapGesture { onActivateSuggestion(index) }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { action() }
-    }
-}
-
-private extension Snippet {
-    var suggestionDetail: String {
-        (title.isEmpty ? content : title).collapsedForSuggestion
+        .accessibilityAction { onActivateSuggestion(index) }
     }
 }
 

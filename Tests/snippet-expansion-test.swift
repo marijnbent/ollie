@@ -119,6 +119,25 @@ struct SnippetExpansionTests {
             in: draftValue, selectedRange: NSRange(location: draftValue.utf16.count, length: 0), trigger: "sig")
         check("AX draft keeps typed casing", draft?.typed == ">Sig  Best regards")
         check("AX draft content follows the trigger", draft?.content == " Best regards")
+        func settle() { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        type(" ")
+        typeText(">merge")
+        settle()
+        check("content-only matches put the create row first", type("\r", keyCode: 36))
+        check("create row inserts the draft space", editor.string.hasSuffix(">merge "))
+        typeText("Merged")
+        check("Return saves after a content match", type("\r", keyCode: 36))
+        check("content match no longer blocks creation", store.exactTriggerMatch(for: "merge")?.content == "Merged")
+        type(" ")
+        typeText(">f")
+        settle()
+        check("create row follows trigger matches", type("", keyCode: 125))
+        check("Return on the trailing create row starts a draft", type("\r", keyCode: 36))
+        check("trailing create row inserts the draft space", editor.string.hasSuffix(">f "))
+        type("", keyCode: 53)
+        for snippet in store.snippets where ["sig", "merge"].contains(snippet.trigger) {
+            store.deleteSnippet(id: snippet.id)
+        }
         type(" ")
         let longText = String(repeating: "  日本語 👩🏽‍💻 café\n\tSecond line\n", count: 20) + "  "
         try store.saveSnippet(title: "Long signature", trigger: "long", content: longText)
