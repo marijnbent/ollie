@@ -63,7 +63,7 @@ private final class HistoryFixture: TranscriptHistoryPersisting, @unchecked Send
         assertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
         let body = try unwrap(JSONSerialization.jsonObject(with: unwrap(request.httpBody)) as? [String: Any])
         assertEqual(body["model"] as? String, "mercury-3")
-        assertEqual(body["reasoning_effort"] as? String, "low")
+        assertEqual(body["reasoning_effort"] as? String, "instant")
         let messages = try unwrap(body["messages"] as? [[String: String]])
         assertEqual(messages, [["role": "user", "content": "Fix punctuation.\n\n<transcription>hello there</transcription>"]])
         let response = Data(#"{"choices":[{"message":{"content":"Hello there.","reasoning_content":"private reasoning"}}]}"#.utf8)

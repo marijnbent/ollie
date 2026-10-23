@@ -30,7 +30,7 @@ enum MercuryClient {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": model.trimmed,
-            "reasoning_effort": "low",
+            "reasoning_effort": "instant",
             "messages": [
                 ["role": "user", "content": "\(prompt)\n\n<transcription>\(transcript)</transcription>"]
             ]

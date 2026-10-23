@@ -76,8 +76,9 @@ directory. History payloads are written with owner-only permissions.
 
 Dictation enhancement prompts select OpenRouter, Celeris, or Mercury and their model independently.
 Mercury calls Inception's `https://api.inceptionlabs.ai/v1/chat/completions` directly, defaults to
-`mercury-3`, and uses `reasoning_effort: low`. Its API key uses the same bundle-specific Keychain
-service as the other dictation providers and is excluded from settings files and backups.
+`mercury-3`, and uses `reasoning_effort: instant` for minimum deliberation latency. Its API key uses
+the same bundle-specific Keychain service as the other dictation providers and is excluded from
+settings files and backups.
 
 There is no standalone-app detection, coexistence gating, or old-app import UI. The requested local
 settings transfer was performed once outside the product, preserving original app preferences and
