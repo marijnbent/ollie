@@ -57,6 +57,16 @@ struct ClipboardCoordinatorTests {
         let snippet = coordinator.snippets.snippets[0]
         check("greater-than searches snippets", coordinator.results(for: ">fixture").map(\.id) == ["snippet-\(snippet.id)"])
         check("colon no longer searches snippets", coordinator.results(for: ":fixture").isEmpty)
+        try coordinator.snippets.saveSnippet(title: "", trigger: "p", content: "pr+merge")
+        try coordinator.snippets.saveSnippet(title: "", trigger: "pr", content: "review")
+        try coordinator.snippets.saveSnippet(title: "Payment", trigger: "bunq", content: "https://bunq.example")
+        try coordinator.snippets.saveSnippet(title: "", trigger: "bank", content: "payment details")
+        check("snippet query excludes title and content matches", coordinator.results(for: ">p").map {
+            if case .snippet(let snippet) = $0 { return snippet.trigger }
+            return ""
+        } == ["p", "pr"])
+        check("snippet triggers ignore case", coordinator.snippets.matches(for: ">P").map(\.trigger) == ["p", "pr"])
+        check("bare prefix still lists every snippet", coordinator.results(for: ">").count == 5)
         core.settings.clipboardEnabled = true
         coordinator.activate(.snippet(snippet), copyOnly: true)
         core.settings.clipboardEnabled = false

@@ -80,44 +80,6 @@ final class SnippetStore {
         persist()
     }
 
-    func matches(for query: String) -> [Snippet] {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedQuery = Snippet.normalizeTrigger(query)
-
-        return snippets
-            .filter { snippet in
-                guard !normalizedQuery.isEmpty else { return true }
-
-                return snippet.trigger.contains(normalizedQuery) ||
-                    snippet.title.localizedCaseInsensitiveContains(trimmedQuery) ||
-                    snippet.content.localizedCaseInsensitiveContains(trimmedQuery)
-            }
-            .sorted { lhs, rhs in
-                let lhsPriority = matchPriority(for: lhs, normalizedQuery: normalizedQuery, rawQuery: trimmedQuery)
-                let rhsPriority = matchPriority(for: rhs, normalizedQuery: normalizedQuery, rawQuery: trimmedQuery)
-
-                if lhsPriority != rhsPriority {
-                    return lhsPriority > rhsPriority
-                }
-
-                if lhs.usageCount != rhs.usageCount {
-                    return lhs.usageCount > rhs.usageCount
-                }
-
-                let lhsLastUsedAt = lhs.lastUsedAt ?? .distantPast
-                let rhsLastUsedAt = rhs.lastUsedAt ?? .distantPast
-                if lhsLastUsedAt != rhsLastUsedAt {
-                    return lhsLastUsedAt > rhsLastUsedAt
-                }
-
-                if lhs.trigger.count != rhs.trigger.count {
-                    return lhs.trigger.count < rhs.trigger.count
-                }
-
-                return lhs.trigger.localizedCaseInsensitiveCompare(rhs.trigger) == .orderedAscending
-            }
-    }
-
     func exactTriggerMatch(for query: String) -> Snippet? {
         let normalizedQuery = Snippet.normalizeTrigger(query)
         guard !normalizedQuery.isEmpty else { return nil }
@@ -125,16 +87,16 @@ final class SnippetStore {
         return snippets.first { $0.trigger == normalizedQuery }
     }
 
-    func expansionMatches(for query: String, limit: Int? = nil) -> [Snippet] {
+    func matches(for query: String) -> [Snippet] {
         let normalizedQuery = Snippet.normalizeTrigger(query)
-        let rankedMatches = snippets
+        return snippets
             .filter { snippet in
                 guard !normalizedQuery.isEmpty else { return true }
                 return snippet.trigger.contains(normalizedQuery)
             }
             .sorted { lhs, rhs in
-                let lhsPriority = expansionMatchPriority(for: lhs, normalizedQuery: normalizedQuery)
-                let rhsPriority = expansionMatchPriority(for: rhs, normalizedQuery: normalizedQuery)
+                let lhsPriority = matchPriority(for: lhs, normalizedQuery: normalizedQuery)
+                let rhsPriority = matchPriority(for: rhs, normalizedQuery: normalizedQuery)
 
                 if lhsPriority != rhsPriority {
                     return lhsPriority > rhsPriority
@@ -156,9 +118,6 @@ final class SnippetStore {
 
                 return lhs.trigger.localizedCaseInsensitiveCompare(rhs.trigger) == .orderedAscending
             }
-
-        guard let limit else { return rankedMatches }
-        return Array(rankedMatches.prefix(limit))
     }
 
     func recordUsage(for snippetID: UUID) {
@@ -200,30 +159,7 @@ final class SnippetStore {
         }
     }
 
-    private func matchPriority(for snippet: Snippet, normalizedQuery: String, rawQuery: String) -> Int {
-        guard !normalizedQuery.isEmpty else { return 0 }
-
-        if snippet.trigger == normalizedQuery {
-            return 4
-        }
-
-        if snippet.trigger.hasPrefix(normalizedQuery) {
-            return 3
-        }
-
-        if snippet.trigger.contains(normalizedQuery) {
-            return 2
-        }
-
-        if snippet.title.localizedCaseInsensitiveContains(rawQuery) { return 1 }
-        if snippet.content.localizedCaseInsensitiveContains(rawQuery) {
-            return 1
-        }
-
-        return -1
-    }
-
-    private func expansionMatchPriority(for snippet: Snippet, normalizedQuery: String) -> Int {
+    private func matchPriority(for snippet: Snippet, normalizedQuery: String) -> Int {
         guard !normalizedQuery.isEmpty else { return 0 }
 
         if snippet.trigger == normalizedQuery {

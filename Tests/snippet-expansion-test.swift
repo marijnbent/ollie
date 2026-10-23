@@ -142,7 +142,7 @@ struct SnippetExpansionTests {
         type(" ")
         typeText(">merge")
         settle()
-        check("content-only matches put the create row first", type("\r", keyCode: 36))
+        check("content-only matches leave only the create row", type("\r", keyCode: 36))
         check("create row inserts the draft space", editor.string.hasSuffix(">merge "))
         typeText("Merged")
         check("Return saves after a content match", type("\r", keyCode: 36))
@@ -171,11 +171,11 @@ struct SnippetExpansionTests {
         check("snippet text never uses Unicode key events", generated.dropFirst(beforeLongEvents).filter {
             $0.type == .keyDown && $0.getIntegerValueField(.keyboardEventKeycode) == 0
         }.isEmpty)
-        check("title matching is available", store.matches(for: "signature").first?.trigger == "long")
+        check("title-only matches are excluded", store.matches(for: "signature").isEmpty)
         try store.saveSnippet(title: "longer title", trigger: "other", content: "Title-only match")
         let exact = store.exactTriggerMatch(for: "long")!
         check("title-only hits do not block auto-expansion", SnippetExpansionPolicy.shouldAutoExpand(
-            exact, among: store.expansionMatches(for: "long")))
+            exact, among: store.matches(for: "long")))
         for prefix in ["-", "=", "a", "<div"] {
             type(" ")
             for character in prefix { type(String(character)) }

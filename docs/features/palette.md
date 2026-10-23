@@ -600,7 +600,7 @@ is absent from Settings. The clipboard mode keeps two columns even with no match
 
 Clipboard invocation switches mode without dismissing the panel, preserving the original paste target.
 An external target gives Enter a paste action; otherwise it copies. ⌘C copies the selected item unless
-a text view has selected text. ⌘K exposes copy, snippet, image-text and delete actions. Left/Right retain caret movement within text; the Floating boundary actions are described below. `>` searches snippets and starts inline expansion. Snippet content preserves leading and trailing whitespace. Snippet creation/editing uses the existing Settings editor.
+a text view has selected text. ⌘K exposes copy, snippet, image-text and delete actions. Left/Right retain caret movement within text; the Floating boundary actions are described below. `>` searches snippet triggers and starts inline expansion. Snippet content preserves leading and trailing whitespace. Snippet creation/editing uses the existing Settings editor.
 
 `ClipboardSearchSession` cancels superseded searches and clears old actionable rows immediately when the query changes; same-query refreshes keep surviving rows visible.
 Image previews decode off-main at a bounded 1600 pixels. Text previews begin with an excerpt and load

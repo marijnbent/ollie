@@ -281,7 +281,7 @@ final class SnippetExpansionController {
             selectedIndex = 0
             if let query = self.activeQuery,
                let exactMatch = exactMatch(for: query),
-               SnippetExpansionPolicy.shouldAutoExpand(exactMatch, among: store.expansionMatches(for: query)) {
+               SnippetExpansionPolicy.shouldAutoExpand(exactMatch, among: store.matches(for: query)) {
                 return expand(exactMatch, pendingCharacterCount: 1, postEvent: postEvent)
             }
             refreshSuggestionsAsync()
@@ -372,7 +372,7 @@ final class SnippetExpansionController {
         let snippets = store.matches(for: query).map(SnippetSuggestion.snippet)
         guard !query.isEmpty, exactMatch(for: query) == nil else { return snippets }
         let create = SnippetSuggestion.draft(SnippetDraft(trigger: query, content: nil))
-        return store.expansionMatches(for: query).isEmpty ? [create] + snippets : snippets + [create]
+        return snippets + [create]
     }
 
     private func selectSuggestion(at index: Int) {

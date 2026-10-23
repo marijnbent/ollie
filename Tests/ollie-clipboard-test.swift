@@ -159,7 +159,7 @@ struct OllieClipboardTests {
         let store = SnippetStore(defaults: defaults)
         try store.saveSnippet(title: "", trigger: ">addr", content: "Address ")
         try store.saveSnippet(title: "", trigger: "address", content: "Long Address")
-        check("exact trigger outranks longer prefix", store.expansionMatches(for: "addr").first?.trigger == "addr")
+        check("exact trigger outranks longer prefix", store.matches(for: "addr").first?.trigger == "addr")
         do {
             try store.saveSnippet(title: "", trigger: "addr", content: "duplicate")
             check("duplicate triggers rejected", false)

@@ -801,7 +801,7 @@ physical keystroke. Operators and tags such as `->`, `=>`, `a>b` and `<div>` do 
 Typing `>` prepares all snippets ranked by usage count, then most recent use. The picker first opens
 after the caret advances past `>`, with a 32 ms fallback when AX does not report the change.
 Tab and arrow selection remain available while opening; Escape cancels the pending display. Typed queries
-rank trigger matches ahead of title and content matches. The compact single-column HUD-glass panel
+match only triggers, ranked by exact match, prefix, then substring. The compact single-column HUD-glass panel
 hugs its content between `snippetMinimumWidth` (220) and `snippetMaximumWidth` (380), scaled by
 Interface Size. Each `snippetRowHeight` (34) row shows a bold trigger, without its `>`, followed by its title or a
 single-line content excerpt in secondary ink. The selected row uses the window switcher's system
@@ -814,12 +814,11 @@ Hover or arrow keys select; click or Tab inserts the selected snippet. Return in
 query, or after arrow navigation on an empty query. A bare `>` followed by Return passes through
 and ends the session, preserving chat send behaviour. Escape dismisses, and Backspace over `>`
 ends the session while deleting the prefix normally. An exact trigger still auto-expands only when
-no other trigger extends it; title/content matches never change that decision.
+no other trigger extends it.
 
 A typed trigger with no exact match can become a snippet in place. The picker adds a `+ trigger` "New
-snippet" row: first when no trigger contains the query, so title/content matches never hide it, and
-last otherwise. Activating it, or typing Space, inserts the space and switches to a draft row; the text
-typed after it becomes the content. Return, Tab or a click then saves the snippet and replaces
+snippet" row after matching triggers, or alone when no trigger contains the query. Activating it, or
+typing Space, inserts the space and switches to a draft row; the text typed after it becomes the content. Return, Tab or a click then saves the snippet and replaces
 `>trigger text` with the trimmed text, which comes from the AX value when readable and otherwise from
 the tracked keystrokes. Backspace over the space returns to the query; Escape, a modifier chord or a
 navigation key leaves the text literal; Return on an empty draft passes through.
