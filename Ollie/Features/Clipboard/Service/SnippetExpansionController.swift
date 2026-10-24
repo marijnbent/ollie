@@ -16,6 +16,8 @@ final class SnippetExpansionController {
     }
     private var pendingPasteID: UUID?
     private var bufferedEvents: [CGEvent] = []
+    private var preparedClipboard: PasteboardSnapshot?
+    private var insertionSound: NSSound?
     private lazy var suggestionWindowController = SnippetSuggestionWindowController(
         metrics: metrics,
         onActivateSuggestion: { [weak self] index in
@@ -71,6 +73,7 @@ final class SnippetExpansionController {
 
     func start() {
         guard eventTap == nil else { return }
+        insertionSound = NSSound(named: NSSound.Name("Pop"))?.copy() as? NSSound
 
         let eventTypes: [CGEventType] = [.keyDown, .keyUp, .leftMouseDown, .rightMouseDown, .otherMouseDown]
         let eventMask = eventTypes.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
@@ -344,6 +347,7 @@ final class SnippetExpansionController {
         openingCaretRect = nil
         activeQuery = nil
         draftContent = nil
+        preparedClipboard = nil
         suggestions = []
         selectedIndex = 0
         hasNavigatedSuggestions = false
@@ -429,6 +433,10 @@ final class SnippetExpansionController {
             refreshSuggestions()
         }
         refreshSuggestionsAsync()
+        Task { @MainActor [weak self] in
+            guard let self, activeQuery != nil, preparedClipboard == nil else { return }
+            preparedClipboard = injector.prepareInlinePaste()
+        }
     }
 
     @discardableResult
@@ -479,6 +487,7 @@ final class SnippetExpansionController {
         _ typed: String, with content: String, postEvent: (CGEvent) -> Void
     ) -> InlineReplacement? {
         let target = frontmostApplication()
+        let prepared = preparedClipboard
         cancelSession()
         guard TextInjector.inlineTriggerIsValid(typed, in: target) else {
             Diagnostics(category: "snippets").warning("Snippet replacement target changed")
@@ -486,13 +495,16 @@ final class SnippetExpansionController {
         }
         let pasteID = UUID()
         pendingPasteID = pasteID
-        guard injector.pasteInline(content, deleting: typed.count, postEvent: postEvent, onFinished: { [weak self] in
+        let resumeInput: @MainActor () -> Void = { [weak self] in
             guard let self, pendingPasteID == pasteID else { return }
             let events = bufferedEvents
             cancelPendingInput()
             guard frontmostApplication()?.processIdentifier == target?.processIdentifier else { return }
             for event in events { replayEvent(event) }
-        }) else {
+        }
+        guard injector.pasteInline(
+            content, deleting: typed.count, prepared: prepared, postEvent: postEvent, onFinished: resumeInput
+        ) else {
             cancelPendingInput()
             return nil
         }
@@ -1168,8 +1180,13 @@ final class SnippetExpansionController {
         }
     }
 
+    /// Starting audio can block for 100 ms, so it waits until the event tap has returned.
     private func playInsertionSound() {
-        NSSound(named: NSSound.Name("Pop"))?.play()
+        Task { @MainActor [weak self] in
+            guard let sound = self?.insertionSound else { return }
+            sound.stop()
+            sound.play()
+        }
     }
 
     private var shouldCommitSnippetSelectionOnReturn: Bool {

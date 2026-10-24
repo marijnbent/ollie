@@ -574,15 +574,23 @@ final class TextInjector {
         return true
     }
 
+    /// Read ahead of the completing key, which would otherwise wait on a slow clipboard owner.
+    func prepareInlinePaste() -> PasteboardSnapshot? {
+        guard !isDelivering else { return nil }
+        return PasteboardSnapshot(pasteboard: pasteboard)
+    }
+
     func pasteInline(
         _ text: String,
         deleting characterCount: Int,
+        prepared: PasteboardSnapshot? = nil,
         postEvent: (CGEvent) -> Void,
         onFinished: @escaping @MainActor () -> Void
     ) -> Bool {
         guard deliveryQueue.isIdle, finishPendingPasteboardOwnership(),
               let events = Self.inlinePasteEvents(deleting: characterCount),
-              let lease = beginTemporaryPasteboardLease(text) else { return false }
+              let lease = TemporaryPasteboardLease.begin(text: text, pasteboard: pasteboard, prepared: prepared)
+        else { return false }
         activePasteboardLease = lease
         deliveryQueue.enqueue { [weak self] in
             guard let self else {
@@ -805,12 +813,15 @@ final class TemporaryPasteboardLease {
         self.original = original
     }
 
+    /// A `prepared` snapshot counts only while `changeCount` proves the clipboard is still that copy.
     static func begin(
         text: String,
         pasteboard: any PasteboardAccess,
+        prepared: PasteboardSnapshot? = nil,
         onMutation: (Int) -> Void = { _ in }
     ) -> TemporaryPasteboardLease? {
-        guard let snapshot = PasteboardSnapshot(pasteboard: pasteboard),
+        let current = prepared.flatMap { $0.changeCount == pasteboard.changeCount ? $0 : nil }
+        guard let snapshot = current ?? PasteboardSnapshot(pasteboard: pasteboard),
             let temporaryItem = PasteboardSnapshot.temporaryItem(carrying: text),
             let originalItems = snapshot.pasteboardItems(),
             pasteboard.changeCount == snapshot.changeCount

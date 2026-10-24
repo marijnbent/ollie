@@ -53,6 +53,16 @@ struct TextInjectionTests {
         board.setString("copied during paste", forType: .string)
         await pasteQueue.drain()
         precondition(board.string(forType: .string) == "copied during paste")
+        let prepared = injector.prepareInlinePaste()
+        precondition(prepared?.changeCount == board.changeCount, "prepared snapshot matches the clipboard")
+        precondition(injector.pasteInline("lent", deleting: 0, prepared: prepared, postEvent: { _ in }, onFinished: {}))
+        await pasteQueue.drain()
+        precondition(board.string(forType: .string) == "copied during paste", "prepared snapshot is restored")
+        board.clearContents()
+        board.setString("copied after preparing", forType: .string)
+        precondition(injector.pasteInline("lent", deleting: 0, prepared: prepared, postEvent: { _ in }, onFinished: {}))
+        await pasteQueue.drain()
+        precondition(board.string(forType: .string) == "copied after preparing", "stale snapshot is ignored")
 
         let text = "a👨‍👩‍👧‍👦é日本語"
         let chunks = UnicodeTypingChunk.split(text)
