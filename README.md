@@ -16,7 +16,10 @@ Requires macOS 26+, Xcode 26, and XcodeGen (`brew install xcodegen`).
 
 ## Build and install
 
+The repository lives at `/Users/marijn/Projects/ollie`.
+
 ```sh
+cd /Users/marijn/Projects/ollie
 ./scripts/release-local.sh
 ```
 

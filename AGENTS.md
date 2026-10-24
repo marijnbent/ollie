@@ -5,6 +5,8 @@ typing sounds, Spaces, media import, notifications and network monitoring. The l
 calculator, notes, quicklinks, window management, emoji and Raycast extensions in JavaScriptCore.
 Mailie is excluded.
 
+The repository lives at `/Users/marijn/Projects/ollie`, independently of the personal-apps workspace.
+
 This repository is the active home of the former Clippie, Importie, Nettie, Ntfy Notifier,
 Tabbie, Talkie, and Typie features. Their standalone source folders and installed app bundles
 are retired; do not depend on sibling repositories or recreate them unless explicitly requested.
