@@ -32,9 +32,10 @@ tools, ink settings, drawing mode or Snap button. Screenshots use a background r
 of the drag, with the stroke composited after mouse-up. Pending backgrounds and output stay bound to
 that stroke, even when a later capture completes first.
 
-Use apps normally between marks. App and Space changes schedule a clean context screenshot after
-500 ms, merging rapid switches. Context captures choose the display containing the largest part of
-the app's frontmost window, falling back to the pointer display for apps without visible windows.
+Use apps normally between marks. App and Space changes record a new narration context immediately,
+then schedule a clean screenshot after 500 ms, merging rapid captures. Clicking another display or
+marking it changes the narration context too. App changes choose the display containing the largest
+part of the frontmost window, falling back to the pointer display when no window is available.
 
 Press the shortcut again, or click Finish, to stop narration. Ollie captures the final context,
 omits an unchanged background, waits for transcription and copies one screen note to the clipboard.
@@ -51,8 +52,20 @@ prompt for Accessibility. Microphone access and speech credentials come from Dic
 ## Pasting
 
 Finish writes one plain-text item, separate PNG items with PNG bytes and file URLs, and a `Note.md`
-file. The note contains the transcript and a screenshot timeline with timestamps, app names, display
-names and capture kinds. `Note.md` repeats the explanation so file-preferring composers receive it.
+file. The note contains narration grouped by app/display context and linked to the closest screenshot
+within that context, plus the complete transcript and screenshot timeline. Returning to an earlier
+app starts a separate context, so its two visits cannot share narration accidentally.
+
+Speech timestamps come from the provider's audio timeline, anchored to the actual recording start
+and re-anchored on reconnect. Receipt time is never used: a delayed final result can still refer to
+an earlier screen. Deepgram, ElevenLabs and AssemblyAI provide word timings; Muse provides utterance
+ranges, which can refer to multiple contexts. ElevenLabs hand-off requests timestamps and waits for
+the delayed timestamped commit before closing. Normal Dictation keeps its existing delivery timing.
+
+Each exported PNG also has a footer with the nearby timed narration, app and display. The screenshot
+pixels remain at their original scale above that footer. This preserves the spoken explanation even
+in composers that import only images. Speech without usable timing stays in the full transcript;
+the first PNG includes that complete session narration when timed image captions do not cover it.
 There is one clipboard write and one user paste; destination apps control which representations they
 accept. There is no destination-specific automation or additional copy command.
 
@@ -65,15 +78,18 @@ session directories; cancelling a new session preserves the previously copied fi
 
 `ScreenInk` and `ScreenNote` are pure models. `ScreenInkView` incrementally appends a native shape
 layer path. `ScreenNoteCapture` uses macOS 26's `SCScreenshotManager`, excluding only the feature's
-control windows so ordinary Ollie windows can also be explained. PNG composition, encoding and
+control windows so ordinary Ollie windows can also be explained. PNG composition, encoding, text footers and
 fingerprinting run off-main. Output work is serialized and screenshots are bounded before admission.
 
 This independent native implementation is inspired by [Scrawl](https://github.com/kitlangton/scrawl).
 Opus consultation recommended one shortcut, held Option for markers, automatic context screenshots
 and the existing dictation hand-off. No third-party dependency is added.
 
-`screen-ink-test` covers marker geometry, storage bounds, capture-slot reservation, display selection
-and point-to-pixel composition. `screen-note-clipboard-test` checks the complete multi-item payload on
-a private pasteboard. Dictation hand-off remains covered by `ollie-dictation-test`.
+`screen-ink-test` covers marker geometry, bounds, capture-slot reservation, display selection and
+speech association across app/display changes and return visits. `transcription-timing-test` checks
+ElevenLabs's delayed timestamped commit and incomplete word metadata. `ollie-dictation-test` verifies
+recording-clock anchoring, late final speech and reconnect offsets. `screen-note-clipboard-test`
+checks a private pasteboard and uses OCR on synthetic exported PNGs to prove they contain the correct
+spoken words even when text and note-file items are ignored.
 Live capture, Option-drag without focus changes, app/Space switching and pasting into AI apps require
 desktop-test approval; the noninteractive harnesses do not establish those behaviors.

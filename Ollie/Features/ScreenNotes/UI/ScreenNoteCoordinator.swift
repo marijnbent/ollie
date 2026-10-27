@@ -21,6 +21,7 @@ final class ScreenNoteCoordinator {
     @ObservationIgnored private var captureTask: Task<Void, Never>?
     @ObservationIgnored private var frames: [UUID: Task<ScreenNoteCapture.Frame, Error>] = [:]
     @ObservationIgnored private var activeFrame: UUID?
+    @ObservationIgnored private var activeContext: ScreenNote.Context?
     @ObservationIgnored private var pendingCaptures = 0
     @ObservationIgnored private var contextTask: Task<Void, Never>?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
@@ -78,13 +79,21 @@ final class ScreenNoteCoordinator {
         case .started:
             guard note?.id == id else { return }
             showPanels(toolbarScreen: screen)
-            markerMonitor.start { [weak self] option in self?.setMarking(option) }
+            _ = selectContext(displayID: displayID)
+            markerMonitor.start(onChange: { [weak self] option in self?.setMarking(option) },
+                                onClick: { [weak self] point in
+                let screen = NSScreen.screens.first { screen in
+                    Self.displayID(screen).map { CGDisplayBounds($0).contains(point) } == true
+                }
+                guard let id = screen.flatMap(Self.displayID) else { return }
+                self?.contextChanged(displayID: id)
+            })
             observe(NSApplication.didChangeScreenParametersNotification, center: .default, context: false)
             observe(NSWorkspace.willSleepNotification, center: NSWorkspace.shared.notificationCenter, context: false)
             observe(NSWorkspace.sessionDidResignActiveNotification, center: NSWorkspace.shared.notificationCenter, context: false)
             observe(NSWorkspace.didActivateApplicationNotification, center: NSWorkspace.shared.notificationCenter, context: true)
             observe(NSWorkspace.activeSpaceDidChangeNotification, center: NSWorkspace.shared.notificationCenter, context: true)
-            enqueue(.start, displayID: displayID)
+            enqueue(.start)
         case .unavailable(let message):
             stop()
             core.showMessage(message, tone: .neutral)
@@ -104,8 +113,10 @@ final class ScreenNoteCoordinator {
 
     func begin(at point: CGPoint, displayID: UInt32) {
         guard phase == .recording, note?.canCapture(.marked, pending: pendingCaptures) == true else { return }
+        guard let context = selectContext(displayID: displayID) else { return }
+        activeContext = context
         ink.begin(at: point, displayID: displayID)
-        activeFrame = startFrame(displayID: displayID)
+        activeFrame = startFrame(context: context)
         canvases[displayID]?.begin(point)
     }
 
@@ -116,34 +127,33 @@ final class ScreenNoteCoordinator {
     }
 
     func finishMark() {
-        guard let stroke = ink.finish(), let frame = activeFrame else { return }
+        guard let stroke = ink.finish(), let frame = activeFrame, let context = activeContext else { return }
         activeFrame = nil
+        activeContext = nil
         canvases[stroke.displayID]?.fade()
-        enqueue(.marked, displayID: stroke.displayID, stroke: stroke, frameID: frame)
+        enqueue(.marked, context: context, stroke: stroke, frameID: frame)
         setMarking(NSEvent.modifierFlags.contains(.option))
     }
 
-    private func startFrame(displayID: UInt32?) -> UUID? {
-        guard let fallback = NSScreen.underCursor.flatMap(Self.displayID) else { return nil }
+    private func startFrame(context: ScreenNote.Context) -> UUID {
         let id = UUID()
-        let app = NSWorkspace.shared.frontmostApplication
         let excluded = panels.map(\.windowNumber) + [toolbar?.windowNumber].compactMap { $0 }
         frames[id] = Task {
-            try await ScreenNoteCapture.frame(displayID: displayID, fallbackDisplayID: fallback,
-                                              app: app, excludedWindows: excluded)
+            try await ScreenNoteCapture.frame(displayID: context.displayID, excludedWindows: excluded)
         }
         return id
     }
 
-    private func enqueue(_ kind: ScreenNote.Kind, displayID: UInt32? = nil,
+    private func enqueue(_ kind: ScreenNote.Kind, context: ScreenNote.Context? = nil,
                          stroke: ScreenInk.Stroke? = nil, frameID: UUID? = nil) {
-        guard let note else { return }
+        guard let note, let context = context ?? note.contexts.last else { return }
         guard note.canCapture(kind, pending: pendingCaptures) else {
             if let frameID { frames.removeValue(forKey: frameID)?.cancel() }
             if kind == .marked { showLimit() }
             return
         }
-        guard let frameID = frameID ?? startFrame(displayID: displayID), let frame = frames[frameID] else { return }
+        let frameID = frameID ?? startFrame(context: context)
+        guard let frame = frames[frameID] else { return }
         let id = note.id
         let elapsed = CACurrentMediaTime() - startedAt
         let previous = captureTask
@@ -164,7 +174,7 @@ final class ScreenNoteCoordinator {
                 if kind != .marked, fingerprints[image.displayID] == result.fingerprint {
                     try FileManager.default.removeItem(at: file)
                 } else if self.note?.append(.init(file: file, elapsed: elapsed, byteCount: result.byteCount,
-                                                 kind: kind, appName: image.appName, displayName: image.displayName)) == true {
+                                                 kind: kind, contextID: context.id)) == true {
                     shotCount = self.note?.shots.count ?? 0
                     fingerprints[image.displayID] = result.fingerprint
                 } else {
@@ -195,16 +205,28 @@ final class ScreenNoteCoordinator {
         core.showMessage("Screenshot limit reached. Narration continues.", tone: .neutral)
     }
 
-    private func contextChanged() {
-        guard phase == .recording else { return }
+    private func selectContext(displayID: UInt32? = nil, force: Bool = false) -> ScreenNote.Context? {
+        let elapsed = note?.contexts.isEmpty == true ? 0 : CACurrentMediaTime() - startedAt
+        guard let proposed = ScreenNoteCapture.context(elapsed: elapsed, displayID: displayID) else { return nil }
+        if !force, let current = note?.contexts.last,
+           current.appName == proposed.appName, current.displayID == proposed.displayID { return current }
         finishMark()
+        note?.contexts.append(proposed)
+        return proposed
+    }
+
+    private func contextChanged(displayID: UInt32? = nil, force: Bool = false) {
+        guard phase == .recording else { return }
+        let previous = note?.contexts.last?.id
+        guard let context = selectContext(displayID: displayID, force: force), context.id != previous else { return }
         setMarking(false)
         contextTask?.cancel()
         let id = note?.id
         contextTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
-            guard let self, self.note?.id == id, self.phase == .recording, self.ink.active == nil else { return }
-            self.enqueue(.switched)
+            guard let self, self.note?.id == id, self.phase == .recording, self.ink.active == nil,
+                  self.note?.contexts.last?.id == context.id else { return }
+            self.enqueue(.switched, context: context)
         }
     }
 
@@ -226,7 +248,11 @@ final class ScreenNoteCoordinator {
         guard phase == .finishing, pendingCaptures == 0,
               let result = transcriptResult, var prepared = note else { return }
         switch result {
-        case .transcript(let text, let issue): prepared.transcript = text; warning = issue ?? warning
+        case .transcript(let text, let spans, let issue):
+            prepared.transcript = text
+            prepared.speech = spans.map { $0.shifted(by: -startedAt) }
+            warning = issue ?? warning
+            if !text.isEmpty && prepared.speech.isEmpty { warning = "Speech timing unavailable." }
         case .failed(let issue): warning = issue
         case .cancelled: stop(); return
         }
@@ -279,6 +305,7 @@ final class ScreenNoteCoordinator {
         contextTask = nil
         frames.removeAll()
         activeFrame = nil
+        activeContext = nil
         pendingCaptures = 0
         observations.removeAll()
         for panel in panels { panel.orderOut(nil); panel.contentView = nil }
@@ -361,7 +388,9 @@ final class ScreenNoteCoordinator {
         let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.note?.id == session else { return }
-                if context { self.contextChanged() } else { self.stop() }
+                if context {
+                    self.contextChanged(force: name == NSWorkspace.activeSpaceDidChangeNotification)
+                } else { self.stop() }
             }
         }
         observations.append(NotificationToken(token, center: center))

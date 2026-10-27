@@ -48,6 +48,33 @@ final class RecordingRuntimeTests {
         }
     }
 
+    func testTimedSpeechUsesAudioTimeAndWaitsThroughFinalization() async {
+        let harness = makeHarness()
+        harness.scheduler.advance(by: 100)
+        harness.runtime.startUnenhanced(ownerShortcutID: UUID())
+        await waitUntil { harness.deepgram.connectCalls.count == 1 }
+        assertTrue(harness.deepgram.connectCalls[0].includeTimings)
+        harness.scheduler.advance(by: 10)
+        harness.deepgram.onTimedTranscript?([TranscriptSpan(text: "First screen", start: 2, end: 3)])
+        await Task.yield()
+        harness.deepgram.emitConnectionDropped("Reconnect")
+        await Task.yield()
+        harness.scheduler.advance(by: 0.4)
+        await waitUntil { harness.deepgram.connectCalls.count == 2 }
+        harness.runtime.handle(action: .stop)
+        await waitUntil { harness.deepgram.closeStreamCallCount == 1 }
+        harness.deepgram.onTimedTranscript?([TranscriptSpan(text: "Second screen", start: 0.2, end: 0.8)])
+        await Task.yield()
+        harness.deepgram.completeClose()
+        await waitUntil { harness.finalizations.value.count == 1 }
+        let spans = harness.finalizations.value[0].transcriptSpans
+        assertEqual(spans.count, 2)
+        assertEqual(spans[0], TranscriptSpan(text: "First screen", start: 102, end: 103))
+        assertTrue(abs(spans[1].start - 110.6) < 0.001)
+        assertTrue(abs(spans[1].end - 111.2) < 0.001)
+        await harness.runtime.waitForShutdown()
+    }
+
     func testReconnectsOnceThenStopsRetryingAndFinalizes() async {
         let harness = makeHarness()
 

@@ -57,6 +57,7 @@ final class AudioCaptureControllerAdapter: AudioCapturePort, @unchecked Sendable
 
 final class DeepgramClientAdapter: TranscriptionStreamPort, @unchecked Sendable {
     var onTranscriptEvent: ((String, Bool) -> Void)?
+    var onTimedTranscript: (([TranscriptSpan]) -> Void)?
     var onLog: ((String, LogLevel) -> Void)?
     var onTranscriptionError: ((String) -> Void)?
     var onConnectionDropped: ((String) -> Void)?
@@ -74,7 +75,8 @@ final class DeepgramClientAdapter: TranscriptionStreamPort, @unchecked Sendable 
             },
             onConnectionDropped: { [weak self] reason in
                 self?.onConnectionDropped?(reason)
-            }
+            },
+            onTimedTranscript: { [weak self] spans in self?.onTimedTranscript?(spans) }
         )
     }()
 
@@ -101,6 +103,7 @@ final class DeepgramClientAdapter: TranscriptionStreamPort, @unchecked Sendable 
 
 final class ElevenLabsClientAdapter: TranscriptionStreamPort, @unchecked Sendable {
     var onTranscriptEvent: ((String, Bool) -> Void)?
+    var onTimedTranscript: (([TranscriptSpan]) -> Void)?
     var onLog: ((String, LogLevel) -> Void)?
     var onTranscriptionError: ((String) -> Void)?
     var onConnectionDropped: ((String) -> Void)?
@@ -118,7 +121,8 @@ final class ElevenLabsClientAdapter: TranscriptionStreamPort, @unchecked Sendabl
             },
             onConnectionDropped: { [weak self] reason in
                 self?.onConnectionDropped?(reason)
-            }
+            },
+            onTimedTranscript: { [weak self] spans in self?.onTimedTranscript?(spans) }
         )
     }()
 
@@ -131,7 +135,8 @@ final class ElevenLabsClientAdapter: TranscriptionStreamPort, @unchecked Sendabl
             apiKey: settings.apiKey,
             format: format,
             language: language,
-            automaticLanguageCandidates: settings.automaticLanguageCandidates
+            automaticLanguageCandidates: settings.automaticLanguageCandidates,
+            includeTimings: settings.includeTimings
         )
     }
 
@@ -150,6 +155,7 @@ final class ElevenLabsClientAdapter: TranscriptionStreamPort, @unchecked Sendabl
 
 final class MuseClientAdapter: TranscriptionStreamPort, @unchecked Sendable {
     var onTranscriptEvent: ((String, Bool) -> Void)?
+    var onTimedTranscript: (([TranscriptSpan]) -> Void)?
     var onLog: ((String, LogLevel) -> Void)?
     var onTranscriptionError: ((String) -> Void)?
     var onConnectionDropped: ((String) -> Void)?
@@ -167,7 +173,8 @@ final class MuseClientAdapter: TranscriptionStreamPort, @unchecked Sendable {
             },
             onConnectionDropped: { [weak self] reason in
                 self?.onConnectionDropped?(reason)
-            }
+            },
+            onTimedTranscript: { [weak self] spans in self?.onTimedTranscript?(spans) }
         )
     }()
 
@@ -180,7 +187,8 @@ final class MuseClientAdapter: TranscriptionStreamPort, @unchecked Sendable {
             apiKey: settings.apiKey,
             format: format,
             language: language,
-            automaticLanguageCandidates: settings.automaticLanguageCandidates
+            automaticLanguageCandidates: settings.automaticLanguageCandidates,
+            includeTimings: settings.includeTimings
         )
     }
 
@@ -199,6 +207,7 @@ final class MuseClientAdapter: TranscriptionStreamPort, @unchecked Sendable {
 
 final class AssemblyAIClientAdapter: TranscriptionStreamPort, @unchecked Sendable {
     var onTranscriptEvent: ((String, Bool) -> Void)?
+    var onTimedTranscript: (([TranscriptSpan]) -> Void)?
     var onLog: ((String, LogLevel) -> Void)?
     var onTranscriptionError: ((String) -> Void)?
     var onConnectionDropped: ((String) -> Void)?
@@ -216,7 +225,8 @@ final class AssemblyAIClientAdapter: TranscriptionStreamPort, @unchecked Sendabl
             },
             onConnectionDropped: { [weak self] reason in
                 self?.onConnectionDropped?(reason)
-            }
+            },
+            onTimedTranscript: { [weak self] spans in self?.onTimedTranscript?(spans) }
         )
     }()
 
@@ -248,6 +258,7 @@ final class AssemblyAIClientAdapter: TranscriptionStreamPort, @unchecked Sendabl
 
 final class TranscriptionStreamRouter: TranscriptionStreamPort, @unchecked Sendable {
     var onTranscriptEvent: ((String, Bool) -> Void)?
+    var onTimedTranscript: (([TranscriptSpan]) -> Void)?
     var onLog: ((String, LogLevel) -> Void)?
     var onTranscriptionError: ((String) -> Void)?
     var onConnectionDropped: ((String) -> Void)?
@@ -332,6 +343,10 @@ final class TranscriptionStreamRouter: TranscriptionStreamPort, @unchecked Senda
         stream.onTranscriptEvent = { [weak self] text, isFinal in
             guard self?.isActive(provider) == true else { return }
             self?.onTranscriptEvent?(text, isFinal)
+        }
+        stream.onTimedTranscript = { [weak self] spans in
+            guard self?.isActive(provider) == true else { return }
+            self?.onTimedTranscript?(spans)
         }
         stream.onLog = { [weak self] message, level in
             guard self?.isActive(provider) == true else { return }

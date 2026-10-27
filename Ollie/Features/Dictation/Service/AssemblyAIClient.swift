@@ -31,6 +31,7 @@ final class AssemblyAIClient: @unchecked Sendable {
     private var pendingBytes = 0
     private var lastFinalTurn = -1
     private var onClosed: Completion?
+    private let onTimedTranscript: (([TranscriptSpan]) -> Void)?
     private let onTranscriptEvent: ((String, Bool) -> Void)?
     private let onLog: ((String, LogLevel) -> Void)?
     private let onTranscriptionError: ((String) -> Void)?
@@ -41,14 +42,18 @@ final class AssemblyAIClient: @unchecked Sendable {
         onLog: ((String, LogLevel) -> Void)? = nil,
         onTranscriptionError: ((String) -> Void)? = nil,
         onConnectionDropped: ((String) -> Void)? = nil,
+        onTimedTranscript: (([TranscriptSpan]) -> Void)? = nil,
         handshakeTimeout: TimeInterval = 15,
         closeTimeout: TimeInterval = 15,
         makeSocket: (@Sendable (URLRequest) -> any AssemblyAISocket)? = nil
     ) {
-        let session = URLSession(configuration: .default)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        let session = URLSession(configuration: configuration)
         self.makeSocket = makeSocket ?? { session.webSocketTask(with: $0) }
         self.handshakeTimeout = handshakeTimeout
         self.closeTimeout = closeTimeout
+        self.onTimedTranscript = onTimedTranscript
         self.onTranscriptEvent = onTranscriptEvent
         self.onLog = onLog
         self.onTranscriptionError = onTranscriptionError
@@ -204,6 +209,9 @@ final class AssemblyAIClient: @unchecked Sendable {
             let final = event.end_of_turn == true
             if final { lastFinalTurn = turn }
             onTranscriptEvent?(text, final)
+            if final {
+                onTimedTranscript?(event.words?.compactMap(\.span) ?? [])
+            }
         case "Termination":
             if closing { finishClose() }
             else { fail("AssemblyAI ended the session unexpectedly.", reconnect: true) }
@@ -261,6 +269,19 @@ private struct AssemblyAIEvent: Decodable {
     let turn_order: Int?
     let transcript: String?
     let end_of_turn: Bool?
+    let words: [AssemblyAIWord]?
     let error: String?
     let message: String?
+}
+
+private struct AssemblyAIWord: Decodable {
+    let text: String?
+    let start: Double?
+    let end: Double?
+
+    var span: TranscriptSpan? {
+        guard let text, let start, let end else { return nil }
+        let span = TranscriptSpan(text: text, start: start / 1000, end: end / 1000)
+        return span.isValid ? span : nil
+    }
 }

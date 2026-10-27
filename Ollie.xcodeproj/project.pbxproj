@@ -749,6 +749,7 @@
 		D10A59C82AA77E4F2E939357 /* ImageThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3453E60C9BBF2F653F093F5 /* ImageThumbnail.swift */; };
 		D10A6272C3906BC01D1B64C7 /* AIAttachmentPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8C5475528B6400E8D40CA2 /* AIAttachmentPolicy.swift */; };
 		D159B9D25856EE98AC2F2609 /* InlineArgumentFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89304BD20A63885DF30CC2F4 /* InlineArgumentFields.swift */; };
+		D195A0A29FB7C7EB2D157A0C /* TranscriptSpan.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2557123D5C203173A052570 /* TranscriptSpan.swift */; };
 		D1A1F0FC1C0299C033108BDB /* SwitcherShortcutMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB47D402609C18799739E28F /* SwitcherShortcutMonitor.swift */; };
 		D1E5E5700D98C47B10728B3F /* CalcTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28B0E99B1933D7615123386 /* CalcTokenizer.swift */; };
 		D1FE5AA5FDCC97261304AAB3 /* HUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F34F1909955586580F015F /* HUDPanel.swift */; };
@@ -802,6 +803,7 @@
 		E2039E573943C4D8384A3BBF /* Usage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F139A3E6C84256E01FD64FBD /* Usage.swift */; };
 		E2CFD706BE99A533D182C3A8 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CFE0C9B9109713433D8C971 /* ChatMessage.swift */; };
 		E336380FCCB7493582146968 /* InstalledAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0636813140A11F962562BF8A /* InstalledAI.swift */; };
+		E3BF687C78EBA8069CF4F222 /* ElevenLabsRealtimeEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB74F400A90E0F9807A73C4D /* ElevenLabsRealtimeEvent.swift */; };
 		E3C0DC2651090EE298FCAC77 /* RowClick.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959AAF937264EE9BE75A7E42 /* RowClick.swift */; };
 		E3D16F242A6AE7D0CEEA24FF /* AIProviderFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0936378D757877D8E1705CB9 /* AIProviderFactory.swift */; };
 		E44AA21B79F99E5DC9E37DBF /* WindowDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E7773429B1BEBA74789B68 /* WindowDiscovery.swift */; };
@@ -1520,6 +1522,7 @@
 		BAA67CC903E842ECFC64A03C /* AliasStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AliasStore.swift; sourceTree = "<group>"; };
 		BAAB6089E3F990C7CFFADCAF /* DictationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationCoordinator.swift; sourceTree = "<group>"; };
 		BB319B06D1C287029408A75A /* QuicklinkLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuicklinkLauncher.swift; sourceTree = "<group>"; };
+		BB74F400A90E0F9807A73C4D /* ElevenLabsRealtimeEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevenLabsRealtimeEvent.swift; sourceTree = "<group>"; };
 		BB788E6019148F8570625FBA /* IconStyleMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconStyleMonitor.swift; sourceTree = "<group>"; };
 		BB7AFD2F4B6AF7B318AAF769 /* ExtensionManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionManifest.swift; sourceTree = "<group>"; };
 		BC32409B9E21942B61FFF399 /* NoteMarkdownTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMarkdownTypography.swift; sourceTree = "<group>"; };
@@ -1717,6 +1720,7 @@
 		F1AA093AD5FBE10969CED2A6 /* ExtensionDeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionDeepLink.swift; sourceTree = "<group>"; };
 		F1D3E68353178A752AEF9F6A /* CalcCurrency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalcCurrency.swift; sourceTree = "<group>"; };
 		F2541943297BAF0F5B1BEE4D /* KeyShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyShortcut.swift; sourceTree = "<group>"; };
+		F2557123D5C203173A052570 /* TranscriptSpan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptSpan.swift; sourceTree = "<group>"; };
 		F27D33618A1FD66E8C60BA4A /* ScreenNoteToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenNoteToolbar.swift; sourceTree = "<group>"; };
 		F27F4DDC27264BAEDC464D2F /* NoteHeadingMenuWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteHeadingMenuWindowController.swift; sourceTree = "<group>"; };
 		F2876ED6A4D8CB788614AA12 /* ReleaseNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotesView.swift; sourceTree = "<group>"; };
@@ -2589,6 +2593,7 @@
 		632CA6A4011184124D35AFBA /* Dictation */ = {
 			isa = PBXGroup;
 			children = (
+				6360DB146204A29ABB31EA2B /* Model */,
 				E072ACD6FBDBE3A06D1BF5D1 /* Runtime */,
 				7311D7853F2FF45ED54762BA /* Service */,
 				7138057B24E3112F7E200646 /* Settings */,
@@ -2596,6 +2601,15 @@
 				BAAB6089E3F990C7CFFADCAF /* DictationCoordinator.swift */,
 			);
 			path = Dictation;
+			sourceTree = "<group>";
+		};
+		6360DB146204A29ABB31EA2B /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				BB74F400A90E0F9807A73C4D /* ElevenLabsRealtimeEvent.swift */,
+				F2557123D5C203173A052570 /* TranscriptSpan.swift */,
+			);
+			path = Model;
 			sourceTree = "<group>";
 		};
 		69D4D750AD593F4DB05AB7B0 /* Service */ = {
@@ -4272,6 +4286,7 @@
 				597598E4BB2883F492D6B08D /* EdgeDissolve.swift in Sources */,
 				5BF970A4D5A4EBDFA3AF6F9F /* ElevenLabsClient.swift in Sources */,
 				7E46BAAA02C47EEADE30DB39 /* ElevenLabsPrerecordedClient.swift in Sources */,
+				E3BF687C78EBA8069CF4F222 /* ElevenLabsRealtimeEvent.swift in Sources */,
 				125236C3F4B50174CA90015F /* EmojiCatalog.swift in Sources */,
 				06690D12A228C9150ED9087C /* EmojiCoordinator.swift in Sources */,
 				62E8387C2E1D5EEB794E0DD1 /* EmojiData.generated.swift in Sources */,
@@ -4812,6 +4827,7 @@
 				A1F014BAED75BAA89FA9BBAF /* Tooltip.swift in Sources */,
 				2FD46E9D3936493B96934C91 /* TranscriptHandOff.swift in Sources */,
 				AD36D443ABFC992726F8EE0A /* TranscriptHistoryStore.swift in Sources */,
+				D195A0A29FB7C7EB2D157A0C /* TranscriptSpan.swift in Sources */,
 				A804DA863517B4508C719CC8 /* TranscriptionLanguageRoutingService.swift in Sources */,
 				0330913BF53A47D5906BC11E /* TranscriptionProvider.swift in Sources */,
 				B1BA7A2AEEC65F4857190BF1 /* TranscriptionReconnectPolicy.swift in Sources */,
@@ -4933,7 +4949,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 41;
+				CURRENT_PROJECT_VERSION = 42;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = X44F5HTS6P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -5020,7 +5036,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 41;
+				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEPLOYMENT_POSTPROCESSING = YES;

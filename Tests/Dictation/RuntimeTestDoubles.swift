@@ -123,12 +123,14 @@ final class FakeAudioCapturePort: AudioCapturePort, @unchecked Sendable {
 final class FakeTranscriptionStreamPort: TranscriptionStreamPort {
     struct ConnectCall {
         let provider: TranscriptionProvider
+        let includeTimings: Bool
         let apiKey: String
         let format: AudioStreamFormat
         let language: DeepgramLanguage
     }
 
     var onTranscriptEvent: ((String, Bool) -> Void)?
+    var onTimedTranscript: (([TranscriptSpan]) -> Void)?
     var onLog: ((String, LogLevel) -> Void)?
     var onTranscriptionError: ((String) -> Void)?
     var onConnectionDropped: ((String) -> Void)?
@@ -147,6 +149,7 @@ final class FakeTranscriptionStreamPort: TranscriptionStreamPort {
         connectCalls.append(
             ConnectCall(
                 provider: settings.provider,
+                includeTimings: settings.includeTimings,
                 apiKey: settings.apiKey,
                 format: format,
                 language: language

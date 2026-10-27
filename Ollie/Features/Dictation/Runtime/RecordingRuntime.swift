@@ -29,6 +29,7 @@ struct EnhancementPromptContext: Equatable {
 }
 
 struct RecordingFinalization {
+    let transcriptSpans: [TranscriptSpan]
     let enhancementPrompt: EnhancementPromptContext?
     let transcriptionError: String?
     let rawRecordingFileURL: URL?
@@ -171,6 +172,7 @@ final class RecordingRuntime {
     var onOwnershipChanged: ((RecordingOwnership?) -> Void)?
     var onOverlayUpdate: ((Bool, String, NSImage?) -> Void)?
     var onAudioLevel: ((CGFloat) -> Void)?
+    private var transcriptSpans: [TranscriptSpan] = []
     var onTranscript: ((String, Bool) -> Void)?
     var onWillStartRecording: (() -> Void)?
     var onFinalizeLatestInterim: (() -> Void)?
@@ -293,7 +295,7 @@ final class RecordingRuntime {
     }
 
     func startUnenhanced(ownerShortcutID: UUID) {
-        startRecording(ownerShortcutID: ownerShortcutID, ownerMode: .click, isLatched: true, enhance: false)
+        startRecording(ownerShortcutID: ownerShortcutID, ownerMode: .click, isLatched: true, enhance: false, includeTimings: true)
     }
 
     func changeTranscriptionLanguage(to language: DeepgramLanguage) {
@@ -309,14 +311,17 @@ final class RecordingRuntime {
         pendingTranscriptionError = nil
         transcriptionReconnectAttempt = 0
         onStatus?(.listening)
+        prepareTranscriptionTiming()
         transcriptionStream.connect(settings: settings, format: format, language: normalizedLanguage)
         onLog?("Language changed to \(normalizedLanguage.displayName).", .info)
     }
 
-    private func startRecording(ownerShortcutID: UUID, ownerMode: ShortcutMode, isLatched: Bool, enhance: Bool = true) {
+    private func startRecording(ownerShortcutID: UUID, ownerMode: ShortcutMode, isLatched: Bool,
+                                enhance: Bool = true, includeTimings: Bool = false) {
         guard phase == .idle else { return }
 
-        let transcriptionSettings = transcriptionSettingsProvider()
+        var transcriptionSettings = transcriptionSettingsProvider()
+        transcriptionSettings.includeTimings = includeTimings
         guard !transcriptionSettings.apiKey.isEmpty else {
             onStatus?(.missingAPIKey)
             onLog?("Missing \(transcriptionSettings.provider.displayName) API key. Open Settings to add one.", .warning)
@@ -348,6 +353,7 @@ final class RecordingRuntime {
         let transcriptionLanguage = resolvedTranscriptionLanguageProvider(activeApplication?.bundleIdentifier)
         pendingTranscriptionLanguage = transcriptionLanguage
 
+        transcriptSpans.removeAll()
         let sessionID = UUID()
         ownership = RecordingOwnership(
             ownerShortcutID: ownerShortcutID,
@@ -384,6 +390,7 @@ final class RecordingRuntime {
             currentRecordingFormat = format
             let rawCapture = rawRecordingCaptureProvider(format)
             rawRecordingCapture = rawCapture
+            prepareTranscriptionTiming()
             audioRouter.activate(sessionID: sessionID, rawCapture: rawCapture)
 
             let resolvedAudioInput = audioInputSelectionProvider()
@@ -506,6 +513,7 @@ final class RecordingRuntime {
 
             self.finalizationTask = nil
             let finalization = RecordingFinalization(
+                transcriptSpans: self.transcriptSpans,
                 enhancementPrompt: enhancementPrompt,
                 transcriptionError: transcriptionError,
                 rawRecordingFileURL: recordingURL,
@@ -535,6 +543,20 @@ final class RecordingRuntime {
     private func cancelFinalizeWatchdog() {
         finalizeWatchdogTask?.cancel()
         finalizeWatchdogTask = nil
+    }
+
+    private func prepareTranscriptionTiming() {
+        guard pendingTranscriptionSettings?.includeTimings == true, let sessionID = ownership?.sessionID else {
+            transcriptionStream.onTimedTranscript = nil
+            return
+        }
+        let origin = clock.now()
+        transcriptionStream.onTimedTranscript = { [weak self] spans in
+            Task { @MainActor [weak self] in
+                guard let self, self.ownership?.sessionID == sessionID else { return }
+                self.transcriptSpans.append(contentsOf: spans.filter(\.isValid).map { $0.shifted(by: origin) })
+            }
+        }
     }
 
     private func handleTranscriptEvent(_ text: String, isFinal: Bool) {
@@ -613,6 +635,7 @@ final class RecordingRuntime {
                 )
                 let language = self.pendingTranscriptionLanguage
                     ?? self.resolvedTranscriptionLanguageProvider(self.currentActiveApplication?.bundleIdentifier)
+                self.prepareTranscriptionTiming()
                 self.transcriptionStream.connect(settings: settings, format: format, language: language)
             }
         }
@@ -707,6 +730,8 @@ final class RecordingRuntime {
         phase = .idle
         ownership = nil
         currentRecordingFormat = nil
+        transcriptSpans.removeAll()
+        transcriptionStream.onTimedTranscript = nil
         currentActiveApplication = nil
         pendingEnhancementPrompt = nil
         pendingTranscriptionLanguage = nil

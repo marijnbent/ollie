@@ -137,6 +137,7 @@ enum TranscriptionProvider: String, Codable, CaseIterable, Identifiable, Sendabl
 }
 
 struct TranscriptionProviderSettings: Equatable, Sendable {
+    var includeTimings = false
     let provider: TranscriptionProvider
     let apiKey: String
     let automaticLanguageCandidates: [DeepgramLanguage]

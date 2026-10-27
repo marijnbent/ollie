@@ -25,6 +25,8 @@ final class ElevenLabsClient: NSObject, @unchecked Sendable {
     private var onClose: (() -> Void)?
     private var closeTimer: DispatchSourceTimer?
 
+    private var includeTimings = false
+    private let onTimedTranscript: (([TranscriptSpan]) -> Void)?
     private let onTranscriptEvent: ((String, Bool) -> Void)?
     private let onLog: ((String, LogLevel) -> Void)?
     private let onTranscriptionError: ((String) -> Void)?
@@ -34,9 +36,11 @@ final class ElevenLabsClient: NSObject, @unchecked Sendable {
         onTranscriptEvent: ((String, Bool) -> Void)? = nil,
         onLog: ((String, LogLevel) -> Void)? = nil,
         onTranscriptionError: ((String) -> Void)? = nil,
-        onConnectionDropped: ((String) -> Void)? = nil
+        onConnectionDropped: ((String) -> Void)? = nil,
+        onTimedTranscript: (([TranscriptSpan]) -> Void)? = nil
     ) {
         session = URLSession(configuration: .default)
+        self.onTimedTranscript = onTimedTranscript
         self.onTranscriptEvent = onTranscriptEvent
         self.onLog = onLog
         self.onTranscriptionError = onTranscriptionError
@@ -49,7 +53,8 @@ final class ElevenLabsClient: NSObject, @unchecked Sendable {
         apiKey: String,
         format: AudioStreamFormat,
         language: DeepgramLanguage,
-        automaticLanguageCandidates: [DeepgramLanguage] = TranscriptionProvider.elevenLabs.defaultAutomaticLanguageCandidates
+        automaticLanguageCandidates: [DeepgramLanguage] = TranscriptionProvider.elevenLabs.defaultAutomaticLanguageCandidates,
+        includeTimings: Bool = false
     ) {
         disconnect(logDisconnection: false)
 
@@ -68,6 +73,7 @@ final class ElevenLabsClient: NSObject, @unchecked Sendable {
             URLQueryItem(name: "audio_format", value: Self.audioFormat(for: format.sampleRate)),
             URLQueryItem(name: "commit_strategy", value: "manual"),
         ]
+        if includeTimings { components.queryItems?.append(URLQueryItem(name: "include_timestamps", value: "true")) }
         components.queryItems?.append(
             contentsOf: Self.languageQueryItems(
                 for: language,
@@ -85,6 +91,7 @@ final class ElevenLabsClient: NSObject, @unchecked Sendable {
         let task = session.webSocketTask(with: request)
         queue.sync {
             self.task = task
+            self.includeTimings = includeTimings
             self.sampleRate = format.sampleRate
             self.channels = format.channels
             self.isConnected = true
@@ -229,7 +236,7 @@ final class ElevenLabsClient: NSObject, @unchecked Sendable {
     }
 
     private func handleIncoming(text: String, for task: URLSessionWebSocketTask) {
-        guard let data = text.data(using: .utf8),
+        guard queue.sync(execute: { self.task === task }), let data = text.data(using: .utf8),
               let event = try? JSONDecoder().decode(ElevenLabsRealtimeEvent.self, from: data) else {
             onLog?("Failed to decode ElevenLabs message. Preview: \(Self.preview(text))", .warning)
             return
@@ -244,7 +251,11 @@ final class ElevenLabsClient: NSObject, @unchecked Sendable {
             if let text = event.text, !text.isEmpty {
                 onTranscriptEvent?(text, true)
             }
-            let shouldFinish = queue.sync { self.task === task && self.isClosing }
+            if event.messageType == "committed_transcript_with_timestamps" { onTimedTranscript?(event.spans) }
+            let shouldFinish = queue.sync {
+                self.task === task && self.isClosing
+                    && event.completesCommit(includingTimings: self.includeTimings)
+            }
             if shouldFinish {
                 finishClose()
             }
@@ -411,19 +422,5 @@ struct ElevenLabsInputAudioChunk: Codable, Equatable {
         audioBase64 = try container.decode(String.self, forKey: .audioBase64)
         commit = try container.decodeIfPresent(Bool.self, forKey: .commit) ?? false
         sampleRate = try container.decode(Int.self, forKey: .sampleRate)
-    }
-}
-
-struct ElevenLabsRealtimeEvent: Decodable, Equatable {
-    let messageType: String?
-    let text: String?
-    let error: String?
-    let sessionID: String?
-
-    enum CodingKeys: String, CodingKey {
-        case messageType = "message_type"
-        case text
-        case error
-        case sessionID = "session_id"
     }
 }

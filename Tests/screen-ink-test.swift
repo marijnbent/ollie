@@ -7,6 +7,7 @@ struct ScreenInkTests {
     static func main() throws {
         try compositing()
         noteLimits()
+        speechContexts()
         let displays: [(id: UInt32, frame: CGRect)] = [
             (1, CGRect(x: 0, y: 0, width: 100, height: 100)),
             (2, CGRect(x: -100, y: 0, width: 100, height: 100))
@@ -31,8 +32,10 @@ struct ScreenInkTests {
     static func noteLimits() {
         let directory = URL(fileURLWithPath: "/unused")
         var note = ScreenNote(id: UUID(), directory: directory)
+        let context = ScreenNote.Context(id: UUID(), elapsed: 0, appName: "Test app", displayID: 1, displayName: "Test display")
+        note.contexts = [context]
         let shot = ScreenNote.Shot(file: directory.appendingPathComponent("Shot 01.png"), elapsed: 65,
-                                  byteCount: 10, kind: .marked, appName: "Test app", displayName: "Test display")
+                                  byteCount: 10, kind: .marked, contextID: context.id)
         for _ in 0..<(ScreenNote.maximumShots - 3) { precondition(note.append(shot)) }
         precondition(!note.canCapture(.switched) && note.canCapture(.marked) && note.canCapture(.final))
         precondition(!note.canCapture(.marked, pending: 2) && note.canCapture(.final, pending: 2))
@@ -41,9 +44,35 @@ struct ScreenInkTests {
         precondition(note.append(shot) && !note.append(shot) && !note.canCapture(.final))
         precondition(note.text.contains("1:05 · Test app · Test display · marked"))
         var full = ScreenNote(id: UUID(), directory: directory)
+        full.contexts = [context]
         precondition(full.append(.init(file: shot.file, elapsed: 0, byteCount: ScreenNote.maximumBytes,
-                                      kind: .start, appName: "Test", displayName: "Test")))
+                                      kind: .start, contextID: context.id)))
         precondition(!full.append(shot))
+    }
+
+    static func speechContexts() {
+        var note = ScreenNote(id: UUID(), directory: URL(filePath: "/unused"))
+        let first = ScreenNote.Context(id: UUID(), elapsed: 0, appName: "Safari", displayID: 1, displayName: "Left")
+        let second = ScreenNote.Context(id: UUID(), elapsed: 10, appName: "Editor", displayID: 2, displayName: "Right")
+        let returned = ScreenNote.Context(id: UUID(), elapsed: 20, appName: "Safari", displayID: 1, displayName: "Left")
+        note.contexts = [first, second, returned]
+        for (index, context, elapsed) in [(1, first, 0.0), (2, first, 5.0), (3, second, 10.5), (4, returned, 20.0)] {
+            precondition(note.append(.init(file: note.directory.appendingPathComponent("Shot \(index).png"), elapsed: elapsed,
+                                          byteCount: 10, kind: .marked, contextID: context.id)))
+        }
+        let early = TranscriptSpan(text: "Make this red.", start: 4, end: 5)
+        note.speech = [TranscriptSpan(text: "Change the filter.", start: 10.1, end: 12),
+                       TranscriptSpan(text: "Now make it blue.", start: 21, end: 23), early, early]
+        note.transcript = "Make this red. Change the filter. Now make it blue."
+        precondition(note.caption(for: note.shots[1]).contains("Make this red."))
+        precondition(!note.caption(for: note.shots[1]).contains("Change the filter."))
+        precondition(note.caption(for: note.shots[2]).contains("Change the filter."))
+        precondition(!note.caption(for: note.shots[3]).contains("Make this red."))
+        precondition(note.caption(for: note.shots[3]).contains("Now make it blue."))
+        precondition(note.text.components(separatedBy: "Make this red.").count == 3)
+        note.speech = []
+        precondition(note.caption(for: note.shots[0]).contains(note.transcript))
+        precondition(note.text.contains("Speech timing unavailable."))
     }
 
     static func compositing() throws {

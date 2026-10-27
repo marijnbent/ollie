@@ -32,11 +32,13 @@ final class MuseClient: NSObject, @unchecked Sendable {
     private var converter: MusePCMConverter?
     private var isConnected = false
     private var isClosing = false
+    private var speechStartMs: Double?
     private var handshakeAccepted = false
     private var pendingAudio: [Data] = []
     private var onClose: (() -> Void)?
     private var closeTimer: DispatchSourceTimer?
 
+    private let onTimedTranscript: (([TranscriptSpan]) -> Void)?
     private let onTranscriptEvent: ((String, Bool) -> Void)?
     private let onLog: ((String, LogLevel) -> Void)?
     private let onTranscriptionError: ((String) -> Void)?
@@ -47,14 +49,18 @@ final class MuseClient: NSObject, @unchecked Sendable {
         onLog: ((String, LogLevel) -> Void)? = nil,
         onTranscriptionError: ((String) -> Void)? = nil,
         onConnectionDropped: ((String) -> Void)? = nil,
+        onTimedTranscript: (([TranscriptSpan]) -> Void)? = nil,
         handshakeTimeout: TimeInterval = 5,
         maximumPendingAudioBytes: Int = 240_000,
         makeSocket: (@Sendable (URL) -> any MuseSocket)? = nil
     ) {
-        let session = URLSession(configuration: .default)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        let session = URLSession(configuration: configuration)
         self.makeSocket = makeSocket ?? { session.webSocketTask(with: $0) }
         self.handshakeTimeout = handshakeTimeout
         self.maximumPendingAudioBytes = maximumPendingAudioBytes
+        self.onTimedTranscript = onTimedTranscript
         self.onTranscriptEvent = onTranscriptEvent
         self.onLog = onLog
         self.onTranscriptionError = onTranscriptionError
@@ -66,7 +72,7 @@ final class MuseClient: NSObject, @unchecked Sendable {
         apiKey: String,
         format: AudioStreamFormat,
         language: DeepgramLanguage,
-        automaticLanguageCandidates: [DeepgramLanguage]
+        automaticLanguageCandidates: [DeepgramLanguage], includeTimings: Bool = false
     ) {
         disconnect(logDisconnection: false)
 
@@ -83,6 +89,7 @@ final class MuseClient: NSObject, @unchecked Sendable {
         let task = makeSocket(Self.endpoint)
         queue.sync {
             self.task = task
+            self.speechStartMs = nil
             self.converter = converter
             self.isConnected = true
             self.isClosing = false
@@ -102,7 +109,8 @@ final class MuseClient: NSObject, @unchecked Sendable {
                 apiKey: apiKey,
                 audioEncoding: converter.audioEncoding,
                 language: TranscriptionProvider.muse.normalizedLanguage(language),
-                automaticLanguageCandidates: automaticLanguageCandidates
+                automaticLanguageCandidates: automaticLanguageCandidates,
+                includeTimings: includeTimings
             )
             task.send(.string(handshake)) { [weak self] error in
                 guard let self, let error, !Self.isCancellationError(error) else { return }
@@ -283,6 +291,15 @@ final class MuseClient: NSObject, @unchecked Sendable {
                 if let transcript = message.transcript, !transcript.isEmpty {
                     self.onTranscriptEvent?(transcript, message.final ?? false)
                 }
+            case "speechStart": self.speechStartMs = message.audioProcessedMs
+            case "speechComplete":
+                if let text = message.transcript {
+                    self.onTranscriptEvent?(text, true)
+                    if let start = self.speechStartMs, let end = message.audioProcessedMs {
+                        self.onTimedTranscript?([TranscriptSpan(text: text, start: start / 1000, end: end / 1000)])
+                    }
+                    self.speechStartMs = nil
+                }
             case "error":
                 self.reportTranscriptionError("Muse error: \(message.message ?? "Unknown provider error.")")
             default:
@@ -390,13 +407,14 @@ final class MuseClient: NSObject, @unchecked Sendable {
         apiKey: String,
         audioEncoding: String,
         language: DeepgramLanguage,
-        automaticLanguageCandidates: [DeepgramLanguage] = TranscriptionProvider.muse.defaultAutomaticLanguageCandidates
+        automaticLanguageCandidates: [DeepgramLanguage] = TranscriptionProvider.muse.defaultAutomaticLanguageCandidates,
+        includeTimings: Bool = false
     ) throws -> String {
         let handshake = MuseHandshake(
             authorization: MuseAuthorization(accessToken: "Bearer \(apiKey)"),
             audioEncoding: audioEncoding,
             model: model,
-            mode: "PUSH_TO_TALK",
+            mode: includeTimings ? "ENDPOINTING" : "PUSH_TO_TALK",
             partialMode: "CUMULATIVE",
             emitAudioProgress: false,
             languageBias: languageBias(
@@ -515,4 +533,5 @@ struct MuseServerMessage: Decodable, Equatable {
     let message: String?
     let transcript: String?
     let final: Bool?
+    let audioProcessedMs: Double?
 }

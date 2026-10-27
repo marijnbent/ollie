@@ -27,6 +27,7 @@ protocol AudioCapturePort: AnyObject, Sendable {
 
 protocol TranscriptionStreamPort: AnyObject {
     var onTranscriptEvent: ((String, Bool) -> Void)? { get set }
+    var onTimedTranscript: (([TranscriptSpan]) -> Void)? { get set }
     var onLog: ((String, LogLevel) -> Void)? { get set }
     var onTranscriptionError: ((String) -> Void)? { get set }
     var onConnectionDropped: ((String) -> Void)? { get set }

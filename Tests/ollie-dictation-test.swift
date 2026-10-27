@@ -29,6 +29,7 @@ private final class HistoryFixture: TranscriptHistoryPersisting, @unchecked Send
         try mercuryRequests()
         await PasteRuntimeTests().testHandOffPreservesHistoryWithoutTouchingClipboard()
         await RecordingRuntimeTests().testUnenhancedRecordingReportsEveryAbandonedExit()
+        await RecordingRuntimeTests().testTimedSpeechUsesAudioTimeAndWaitsThroughFinalization()
         await RecordingRuntimeTests().testReconnectsOnceThenStopsRetryingAndFinalizes()
         await RecordingRuntimeTests().testDoesNotReconnectWhileFinalizing()
         await RecordingRuntimeTests().testProviderErrorIsPreservedWhenConnectionThenDrops()

@@ -7,6 +7,7 @@ final class DeepgramClient: NSObject, @unchecked Sendable {
     private var task: URLSessionWebSocketTask?
     private var isConnected = false
     private var isClosing = false
+    private let onTimedTranscript: (([TranscriptSpan]) -> Void)?
     private let onTranscriptEvent: ((String, Bool) -> Void)?
     private let onLog: ((String, LogLevel) -> Void)?
     private let onTranscriptionError: ((String) -> Void)?
@@ -22,11 +23,13 @@ final class DeepgramClient: NSObject, @unchecked Sendable {
         onTranscriptEvent: ((String, Bool) -> Void)? = nil,
         onLog: ((String, LogLevel) -> Void)? = nil,
         onTranscriptionError: ((String) -> Void)? = nil,
-        onConnectionDropped: ((String) -> Void)? = nil
+        onConnectionDropped: ((String) -> Void)? = nil,
+        onTimedTranscript: (([TranscriptSpan]) -> Void)? = nil
     ) {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         self.session = URLSession(configuration: configuration, delegate: nil, delegateQueue: nil)
+        self.onTimedTranscript = onTimedTranscript
         self.onTranscriptEvent = onTranscriptEvent
         self.onLog = onLog
         self.onTranscriptionError = onTranscriptionError
@@ -246,7 +249,7 @@ final class DeepgramClient: NSObject, @unchecked Sendable {
     }
 
     private func handleIncoming(text: String, for task: URLSessionWebSocketTask) {
-        guard let data = text.data(using: .utf8) else { return }
+        guard queue.sync(execute: { self.task === task }), let data = text.data(using: .utf8) else { return }
         guard let result = try? JSONDecoder().decode(DeepgramLiveResult.self, from: data) else {
             let failureCount = queue.sync { () -> Int in
                 decodeFailureCount += 1
@@ -264,6 +267,7 @@ final class DeepgramClient: NSObject, @unchecked Sendable {
         if let transcript = result.transcript, !transcript.isEmpty {
             let isFinal = (result.is_final ?? false) || (result.speech_final ?? false) || (result.from_finalize ?? false)
             onTranscriptEvent?(transcript, isFinal)
+            if isFinal { onTimedTranscript?(result.channel?.alternatives?.first?.words?.compactMap(\.span) ?? []) }
         }
 
         if result.type == "Error", let description = result.errorDescription {
@@ -386,4 +390,18 @@ private struct DeepgramChannel: Decodable {
 
 private struct DeepgramAlternative: Decodable {
     let transcript: String?
+    let words: [DeepgramWord]?
+}
+
+private struct DeepgramWord: Decodable {
+    let word: String?
+    let punctuated_word: String?
+    let start: Double?
+    let end: Double?
+
+    var span: TranscriptSpan? {
+        guard let text = punctuated_word ?? word, let start, let end else { return nil }
+        let span = TranscriptSpan(text: text, start: start, end: end)
+        return span.isValid ? span : nil
+    }
 }

@@ -313,7 +313,7 @@ final class DictationRuntimeCoordinator {
                 guard !Task.isCancelled, let delivery, self.handOff?.id == delivery.id else { return }
                 self.handOff = nil
                 if let text = outcome.text {
-                    delivery.finish(.transcript(text, warning: finalization.transcriptionError))
+                    delivery.finish(.transcript(text, spans: finalization.transcriptSpans, warning: finalization.transcriptionError))
                 } else {
                     delivery.finish(.failed(finalization.transcriptionError ?? TranscriptHistoryEntry.emptyTranscriptionMessage))
                 }

@@ -8,8 +8,6 @@ enum ScreenNoteCapture {
         let image: CGImage
         let displayID: UInt32
         let pointSize: CGSize
-        let displayName: String
-        let appName: String
     }
 
     enum Failure: LocalizedError {
@@ -23,23 +21,32 @@ enum ScreenNoteCapture {
         }
     }
 
-    static func frame(displayID: UInt32?, fallbackDisplayID: UInt32, app: NSRunningApplication?,
-                      excludedWindows: [Int]) async throws -> Frame {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        try Task.checkCancellation()
+    static func context(elapsed: TimeInterval, displayID: UInt32? = nil) -> ScreenNote.Context? {
+        let app = NSWorkspace.shared.frontmostApplication
         let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
             as? [[String: Any]] ?? []
         let frontWindow = windows.first {
             ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == app?.processIdentifier
                 && ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0
         }
-        let windowID = (frontWindow?[kCGWindowNumber as String] as? NSNumber)?.uint32Value
-        let window = content.windows.first { $0.windowID == windowID }
-        let contextDisplay = window.flatMap { window in
-            ScreenNote.displayID(for: window.frame, displays: content.displays.map { ($0.displayID, $0.frame) })
+        let bounds = (frontWindow?[kCGWindowBounds as String] as? [String: Any]).flatMap {
+            CGRect(dictionaryRepresentation: $0 as CFDictionary)
         }
-        let selected = displayID ?? contextDisplay ?? fallbackDisplayID
-        guard let display = content.displays.first(where: { $0.displayID == selected }) else {
+        let displays = NSScreen.screens.compactMap { screen -> (id: UInt32, frame: CGRect)? in
+            guard let id = screenID(screen) else { return nil }
+            return (id, CGDisplayBounds(id))
+        }
+        let focused = bounds.flatMap { ScreenNote.displayID(for: $0, displays: displays) }
+        guard let selected = displayID ?? focused ?? NSScreen.underCursor.flatMap(screenID),
+              let screen = NSScreen.screens.first(where: { screenID($0) == selected }) else { return nil }
+        return ScreenNote.Context(id: UUID(), elapsed: elapsed, appName: app?.localizedName ?? "Desktop",
+                                  displayID: selected, displayName: screen.localizedName)
+    }
+
+    static func frame(displayID: UInt32, excludedWindows: [Int]) async throws -> Frame {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        try Task.checkCancellation()
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
             throw Failure.displayMissing
         }
         let excluded = content.windows.filter { excludedWindows.contains(Int($0.windowID)) }
@@ -54,11 +61,7 @@ enum ScreenNoteCapture {
         let output = try await SCScreenshotManager.captureScreenshot(contentFilter: filter, configuration: configuration)
         try Task.checkCancellation()
         guard let image = output.sdrImage else { throw Failure.imageMissing }
-        let screen = NSScreen.screens.first {
-            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == selected
-        }
-        return Frame(image: image, displayID: selected, pointSize: size,
-                     displayName: screen?.localizedName ?? "Display", appName: app?.localizedName ?? "Desktop")
+        return Frame(image: image, displayID: displayID, pointSize: size)
     }
 
     nonisolated static func save(_ frame: Frame, strokes: [ScreenInk.Stroke], file: URL) throws
@@ -76,4 +79,7 @@ enum ScreenNoteCapture {
         return (data.count, fingerprint)
     }
 
+    static func screenID(_ screen: NSScreen) -> UInt32? {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
 }

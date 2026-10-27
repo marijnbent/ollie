@@ -1,4 +1,6 @@
 import AppKit
+import CoreText
+import ImageIO
 
 enum ScreenNoteClipboard {
     struct Payload: Sendable {
@@ -10,7 +12,18 @@ enum ScreenNoteClipboard {
         let noteFile = note.directory.appendingPathComponent("Note.md")
         try Data(note.text.utf8).write(to: noteFile, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: noteFile.path)
-        var files = try note.shots.map { (url: $0.file, png: Optional(try Data(contentsOf: $0.file))) }
+        let font = CTFontCreateWithName("Helvetica" as CFString, 24, nil)
+        var totalBytes = 0
+        var files = try note.shots.map { shot -> (url: URL, png: Data?) in
+            guard let source = CGImageSourceCreateWithURL(shot.file as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ScreenNoteImage.Failure.rendering }
+            let data = try ScreenNoteImage.caption(image, text: note.caption(for: shot), font: font)
+            totalBytes += data.count
+            guard totalBytes <= ScreenNote.maximumBytes else { throw CocoaError(.fileWriteOutOfSpace) }
+            try data.write(to: shot.file, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: shot.file.path)
+            return (url: shot.file, png: data)
+        }
         files.append((url: noteFile, png: nil))
         return Payload(text: note.text, files: files)
     }
