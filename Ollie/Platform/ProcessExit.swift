@@ -2,9 +2,12 @@ import Foundation
 
 extension Process {
     /// Use instead of `waitUntilExit`, whose run loop can miss the exit on a GCD thread and hang.
-    func runObservingExit() throws -> ProcessExit {
+    func runObservingExit(onExit: @escaping @Sendable (Process) -> Void = { _ in }) throws -> ProcessExit {
         let exit = ProcessExit()
-        terminationHandler = { _ in exit.signal() }
+        terminationHandler = { process in
+            onExit(process)
+            exit.signal()
+        }
         try run()
         return exit
     }

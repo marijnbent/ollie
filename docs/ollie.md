@@ -104,6 +104,9 @@ cancellation during enhancement. Paste or insertion-verification failure preserv
 ## Scope and release
 
 Network includes Nettie’s existing process traffic monitor, per-app usage, and saved daily totals.
+Its collector runs under a supervisor tied to a private pipe from Ollie. Stopping monitoring or
+losing Ollie's process closes that pipe; the supervisor kills and reaps `nettop` before exiting.
+This prevents collectors from spinning on a disconnected terminal after a crash or relaunch.
 It does not enforce network rules. The configured Personal Team cannot provision the required Network
 Extension capability; settings accurately show monitoring and inactive protection.
 

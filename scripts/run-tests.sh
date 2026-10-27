@@ -626,6 +626,10 @@ run media-import-state-test -parse-as-library \
     Ollie/Features/MediaImport/Service/*.swift \
     Ollie/Features/MediaImport/Settings/MediaImportSettingsStore.swift \
     Ollie/Platform/{AppPaths,ProcessExit}.swift
+run nettop-lifecycle-test -parse-as-library \
+    Ollie/Features/Network/Model/*.swift \
+    Ollie/Features/Network/Service/NetTopMonitor.swift \
+    Ollie/Platform/ProcessExit.swift
 run ollie-services-test -parse-as-library \
     Ollie/Features/TypingSounds/Model/*.swift \
     Ollie/Features/TypingSounds/Service/SoundEngine.swift \

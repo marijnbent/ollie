@@ -6,8 +6,9 @@ import Darwin
 public final class NetTopMonitor {
     public var onSample: (([AppUsage], Date, Date) -> Void)?
     public var onError: ((String) -> Void)?
-    private var process: Process?
     private var reader: Task<Void, Never>?
+    private var lifetime: FileHandle?
+    private var processExit: ProcessExit?
     private var knownProcesses: [Int32: (String, MonitoredApp)] = [:]
     private var knownPaths: [String: MonitoredApp] = [:]
 
@@ -18,6 +19,12 @@ public final class NetTopMonitor {
     }
 
     public init() {}
+
+    deinit {
+        reader?.cancel()
+        try? lifetime?.close()
+        processExit?.wait()
+    }
 
     public func start() {
         stop()
@@ -35,11 +42,24 @@ public final class NetTopMonitor {
         let output = FileHandle(fileDescriptor: master, closeOnDealloc: true)
         let terminal = FileHandle(fileDescriptor: slave, closeOnDealloc: true)
         let errors = Pipe()
+        let lifetime = Pipe()
         let (events, continuation) = AsyncStream<Event>.makeStream()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
-        process.arguments = ["-P", "-d", "-L", "0", "-n", "-x", "-J", "bytes_in,bytes_out", "-s", "1", "-t", "external"]
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        let supervisor = """
+        /usr/bin/nettop "$@" <&1 &
+        collector=$!
+        { read -r lifetime; kill -KILL "$collector" 2>/dev/null; } <&0 &
+        watcher=$!
+        trap 'kill -KILL "$collector" "$watcher" 2>/dev/null; wait "$collector" "$watcher" 2>/dev/null' EXIT
+        trap 'exit' HUP INT TERM
+        wait "$collector"
+        """
+        process.arguments = [
+            "-c", supervisor, "ollie-nettop", "-P", "-d", "-L", "0", "-n", "-x",
+            "-J", "bytes_in,bytes_out", "-s", "1", "-t", "external"
+        ]
         process.environment = ProcessInfo.processInfo.environment.merging(["LC_ALL": "C"]) { _, new in new }
-        process.standardInput = terminal
+        process.standardInput = lifetime.fileHandleForReading
         process.standardOutput = terminal
         process.standardError = errors
         output.readabilityHandler = { handle in
@@ -51,14 +71,15 @@ public final class NetTopMonitor {
             let data = handle.availableData
             if !data.isEmpty { continuation.yield(.error(data)) }
         }
-        process.terminationHandler = { process in
-            continuation.yield(.exit(process.terminationStatus))
-            continuation.finish()
-        }
         do {
-            try process.run()
-            try terminal.close()
-            self.process = process
+            let exit = try process.runObservingExit { process in
+                continuation.yield(.exit(process.terminationStatus))
+                continuation.finish()
+            }
+            self.processExit = exit
+            self.lifetime = lifetime.fileHandleForWriting
+            try? terminal.close()
+            try? lifetime.fileHandleForReading.close()
         } catch {
             output.readabilityHandler = nil
             errors.fileHandleForReading.readabilityHandler = nil
@@ -72,7 +93,7 @@ public final class NetTopMonitor {
             defer {
                 output.readabilityHandler = nil
                 errors.fileHandleForReading.readabilityHandler = nil
-                if process.isRunning { process.terminate() }
+                try? lifetime.fileHandleForWriting.close()
                 try? output.close()
             }
             do {
@@ -103,8 +124,10 @@ public final class NetTopMonitor {
     public func stop() {
         reader?.cancel()
         reader = nil
-        if let process, process.isRunning { process.terminate() }
-        process = nil
+        try? lifetime?.close()
+        processExit?.wait()
+        lifetime = nil
+        processExit = nil
         knownProcesses = [:]
     }
 
