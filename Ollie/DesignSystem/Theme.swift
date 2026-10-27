@@ -66,6 +66,11 @@ enum Theme {
     }
 
     enum Size {
+        static let screenNotesToolbar = CGSize(width: 370, height: 48)
+        static let screenNoteCaptureToolbar = CGSize(width: 600, height: 48)
+        static let screenNotesControl: CGFloat = 28
+        static let screenNotesSwatch: CGFloat = 20
+        static let screenNotesFont: CGFloat = 13
         static let snippetMinimumWidth: CGFloat = 220
         static let snippetMaximumWidth: CGFloat = 380
         static let snippetRowHeight: CGFloat = 34

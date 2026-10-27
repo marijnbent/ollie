@@ -636,6 +636,9 @@ run ollie-services-test -parse-as-library \
     Ollie/Features/Updates/Model/UpdateReadiness.swift \
     Ollie/Platform/ProcessExit.swift \
     Ollie/Platform/AppPaths.swift
+run screen-ink-test Ollie/Features/ScreenNotes/Model/*.swift
+run screen-note-clipboard-test Ollie/Features/ScreenNotes/Model/ScreenNote.swift \
+    Ollie/Features/ScreenNotes/Service/ScreenNoteClipboard.swift Ollie/Platform/PasteboardFiles.swift
 run -O feature-availability-test -parse-as-library \
     Ollie/Features/Settings/SettingsTab.swift \
     Ollie/Features/Settings/Model/FeatureAvailability.swift \

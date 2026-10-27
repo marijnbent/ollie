@@ -152,6 +152,19 @@ final class DictationCoordinator: HealthCheckable {
 
     func cancelRecording() { runtime.cancelFromEsc() }
 
+    func beginHandOff(_ delivery: TranscriptHandOff) -> TranscriptHandOff.Start {
+        guard isRunning else { return .unavailable("Enable and configure Dictation first.") }
+        return runtime.beginHandOff(delivery)
+    }
+
+    func handOffUnavailableReason() -> String? {
+        guard isRunning else { return "Enable and configure Dictation first." }
+        return runtime.handOffUnavailableReason()
+    }
+
+    func endHandOff(id: UUID) { runtime.endHandOff(id: id) }
+    func cancelHandOff(id: UUID) { runtime.cancelHandOff(id: id) }
+
     func stop() {
         generation += 1
         loadTask?.cancel()

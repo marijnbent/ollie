@@ -120,6 +120,12 @@ enum SettingsFileKey: String, CaseIterable, Sendable {
     case calendarCommands = "calendar.commands"
     case extensionsShowInLauncher = "extensions.showInLauncher"
 
+    case screenNotesTool = "screenNotes.tool"
+    case screenNotesColor = "screenNotes.color"
+    case screenNotesWidth = "screenNotes.width"
+    case screenNotesLifetime = "screenNotes.clearAfterSeconds"
+    case screenNotesShortcut = "screenNotes.shortcut"
+
     case typingSoundProfile = "sounds.typingSoundProfile"
     case typingSoundVolume = "sounds.typingSoundVolume"
     case typingSoundDownVolume = "sounds.typingSoundDownVolume"
@@ -128,7 +134,7 @@ enum SettingsFileKey: String, CaseIterable, Sendable {
     case typingMouseVolume = "sounds.typingMouseVolume"
 
     static let available = allCases.filter {
-        ["spaces", "mediaImport", "dictation", "clipboard", "windowSwitcher", "sounds", "general", "appearance", "search", "applications", "emoji", "ai"].contains($0.section)
+        ["screenNotes", "spaces", "mediaImport", "dictation", "clipboard", "windowSwitcher", "sounds", "general", "appearance", "search", "applications", "emoji", "ai"].contains($0.section)
     }
 
     /// The top-level object the key sits in.

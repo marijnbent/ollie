@@ -1,7 +1,7 @@
 # Ollie
 
 A native macOS utility combining Ollie’s launcher, clipboard history and snippets, dictation,
-window switching, typing sounds, camera imports, ntfy notifications, and network usage.
+window switching, narrated screen captures and temporary drawing, typing sounds, camera imports, ntfy notifications, and network usage.
 Mailie stays separate. The launcher is forked from [Tinycast](https://github.com/abue-ammar/tinycast).
 
 The menu is a compact strip of actions with live activity above it. Native grouped settings hold
@@ -13,6 +13,10 @@ quit that app, import it under Settings → Backup, then enable the correspondin
 topics import from the Notifications pane. Existing Ollie preferences stay in place.
 
 Requires macOS 26+, Xcode 26, and XcodeGen (`brew install xcodegen`).
+
+[Screen Notes](docs/features/screen-notes.md) combines existing dictation with annotated screenshots.
+Enable it in Settings → Features, then use **Explain Screen**: talk, draw or take more snapshots, and
+finish to copy the screenshots and note for pasting into AI. **Draw on Screen** also works on its own.
 
 ## Build and install
 

@@ -43,7 +43,7 @@ struct SettingsHistoryTests {
     }
 
     static func unsupportedPanesCannotOpen() {
-        expect(SettingsTab.available == [.features, .general, .shortcuts, .applications, .clipboard, .snippets, .dictation, .windowSwitcher, .spaces, .emoji, .ai, .typingSounds, .network, .notifications, .mediaImport, .permissions, .backup, .about],
+        expect(SettingsTab.available == [.features, .general, .shortcuts, .applications, .clipboard, .snippets, .dictation, .windowSwitcher, .spaces, .emoji, .ai, .screenNotes, .typingSounds, .network, .notifications, .mediaImport, .permissions, .backup, .about],
             "Settings offers every integrated Ollie feature and supporting panes")
         let navigation = SettingsNavigationState(tab: .general)
         for tab in SettingsTab.allCases where !SettingsTab.available.contains(tab) {

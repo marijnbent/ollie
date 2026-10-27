@@ -27,6 +27,7 @@ final class AppCore {
     @ObservationIgnored private(set) lazy var clipboard = ClipboardCoordinator(core: self, ticker: healthTicker)
     @ObservationIgnored private(set) lazy var windowSwitcher = WindowSwitcherCoordinator(core: self, ticker: healthTicker)
     @ObservationIgnored private(set) lazy var dictation = DictationCoordinator(core: self, ticker: healthTicker)
+    @ObservationIgnored private(set) lazy var screenNotes = ScreenNoteCoordinator(core: self)
     let network = NetworkCoordinator()
     let hotKeys = HotKeyManager()
     let windowMover = WindowMover()
@@ -468,6 +469,7 @@ final class AppCore {
 
     func flushNotesForTermination() async -> Bool {
         defer { restartRequested = false }
+        await screenNotes.prepareForTermination()
         let dictationSaved = await dictation.prepareForTermination()
         let clipboardSaved = await clipboard.prepareForTermination()
         notifications.stop()
@@ -504,6 +506,7 @@ final class AppCore {
         clipboard.stop()
         typingSounds.stop()
         cameraCoordinator.stop()
+        screenNotes.stop(restoreFocus: false)
         customCommandCoordinator.stop()
         mediaImport.stop()
         notifications.stop()
@@ -606,6 +609,14 @@ final class AppCore {
         if changed(.feature(.dictation)) { dictation.apply() }
         if changed(.feature(.windowSwitcher)) { windowSwitcher.apply() }
         if changed(.feature(.spaces)) { spaces.apply() }
+        if changed(.feature(.screenNotes)) {
+            screenNotes.apply()
+            appIndex.setCommandsVisible([.drawOnScreen], next.allows(.feature(.screenNotes)))
+        }
+        if changed(.screenExplanation) {
+            screenNotes.apply()
+            appIndex.setCommandsVisible([.explainScreen], next.allows(.screenExplanation))
+        }
         if changed(.feature(.typingSounds)) { typingSounds.apply() }
         if changed(.feature(.network)) { applyNetworkEnabled() }
         if changed(.feature(.notifications)) { notifications.apply() }
@@ -859,7 +870,7 @@ final class AppCore {
             isUninstalling: uninstall.isTrashing,
             isRecordingHotKey: hotKeys.recordingAction != nil,
             isShowingDialog: isShowingDialog,
-            isPaletteVisible: paletteCoordinator.isVisible,
+            isPaletteVisible: paletteCoordinator.isVisible || screenNotes.isActive,
             isImporting: mediaImport.state.isImporting, isRecording: dictation.isBusy)
     }
 

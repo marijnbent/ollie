@@ -19,6 +19,7 @@ final class DictationRuntimeCoordinator {
 
     private var pasteTask: Task<Void, Never>?
     private var pasteGeneration = 0
+    private var handOff: TranscriptHandOff?
     var onProcessingChanged: ((Bool) -> Void)?
 
     init(
@@ -128,6 +129,7 @@ final class DictationRuntimeCoordinator {
 
     func stop() {
         recordingRuntime.cancelFromEsc()
+        abandonHandOff()
         pasteTask?.cancel()
         pasteRuntime.cancelPendingVerification()
         systemMuteController.restoreMute()
@@ -147,6 +149,47 @@ final class DictationRuntimeCoordinator {
         handleShortcutActions([.start(ownerShortcutID: id, ownerMode: .click, latched: true)])
     }
 
+    func beginHandOff(_ delivery: TranscriptHandOff) -> TranscriptHandOff.Start {
+        if let issue = handOffUnavailableReason() { return .unavailable(issue) }
+        handOff = delivery
+        recordingRuntime.startUnenhanced(ownerShortcutID: delivery.id)
+        return .started
+    }
+
+    func handOffUnavailableReason() -> String? {
+        guard isEnabled() else { return "Enable Dictation first." }
+        guard recordingRuntime.phase == .idle, pasteTask == nil, handOff == nil else {
+            return "Finish the current dictation first."
+        }
+        permissionService.refreshPermissions()
+        guard permissionService.microphonePermission == .authorized else {
+            return "Allow Microphone access in Dictation settings first."
+        }
+        guard !settingsStore.transcriptionProviderSettings.apiKey.isEmpty else {
+            return "Add a speech-to-text API key in Dictation settings first."
+        }
+        return nil
+    }
+
+    func endHandOff(id: UUID) {
+        guard handOff?.id == id else { return }
+        recordingRuntime.handle(action: .stop)
+    }
+
+    func cancelHandOff(id: UUID) {
+        guard handOff?.id == id else { return }
+        handOff = nil
+        recordingRuntime.cancelFromEsc()
+        pasteTask?.cancel()
+        pasteRuntime.cancelPendingVerification()
+    }
+
+    private func abandonHandOff() {
+        let abandoned = handOff
+        handOff = nil
+        abandoned?.finish(.cancelled)
+    }
+
     func cancelFromEsc() {
         if recordingRuntime.phase != .idle {
             recordingRuntime.cancelFromEsc()
@@ -155,6 +198,7 @@ final class DictationRuntimeCoordinator {
 
         pasteTask?.cancel()
         pasteRuntime.cancelPendingVerification()
+        abandonHandOff()
     }
 
     func applySettings() {
@@ -164,6 +208,7 @@ final class DictationRuntimeCoordinator {
     }
 
     private func bindRuntimes() {
+        recordingRuntime.onAbandoned = { [weak self] in self?.abandonHandOff() }
         shortcutRuntime.phaseProvider = { [weak self] in
             self?.recordingRuntime.phase ?? .idle
         }
@@ -194,6 +239,7 @@ final class DictationRuntimeCoordinator {
         }
         recordingRuntime.onOverlayUpdate = { [weak self] visible, label, appIcon in
             guard let self else { return }
+            guard self.handOff == nil else { return }
             if visible {
                 self.windowCoordinator.showOverlay(label: label, appIcon: appIcon)
             } else {
@@ -228,6 +274,8 @@ final class DictationRuntimeCoordinator {
             self.pasteTask?.cancel()
             self.pasteGeneration += 1
             let generation = self.pasteGeneration
+            let delivery = self.handOff
+            if delivery != nil { self.sessionState.finalizeLatestInterimTranscript() }
             self.onProcessingChanged?(true)
             self.pasteTask = Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -241,7 +289,7 @@ final class DictationRuntimeCoordinator {
                     self.rawRecordingStore.deleteRecording(at: finalization.rawRecordingFileURL)
                     return
                 }
-                let recordingAdopted = await self.pasteRuntime.process(
+                let outcome = await self.pasteRuntime.process(
                     session: FinalizedTranscriptSession(
                         finalTranscript: self.sessionState.finalTranscript,
                         lastTranscript: self.sessionState.lastTranscript,
@@ -255,11 +303,19 @@ final class DictationRuntimeCoordinator {
                             self.settingsStore.enhancementProviderSettings(for: $0)
                         },
                         playSoundEffects: self.settingsStore.playSoundEffects,
-                        restoreClipboardAfterPaste: self.settingsStore.restoreClipboardAfterPaste
+                        restoreClipboardAfterPaste: self.settingsStore.restoreClipboardAfterPaste,
+                        delivery: delivery == nil ? .paste : .handOff
                     )
                 )
-                if !recordingAdopted {
+                if !outcome.recordingAdopted {
                     self.rawRecordingStore.deleteRecording(at: finalization.rawRecordingFileURL)
+                }
+                guard !Task.isCancelled, let delivery, self.handOff?.id == delivery.id else { return }
+                self.handOff = nil
+                if let text = outcome.text {
+                    delivery.finish(.transcript(text, warning: finalization.transcriptionError))
+                } else {
+                    delivery.finish(.failed(finalization.transcriptionError ?? TranscriptHistoryEntry.emptyTranscriptionMessage))
                 }
             }
         }
@@ -272,6 +328,7 @@ final class DictationRuntimeCoordinator {
     private func handleShortcutActions(_ actions: [ShortcutAction]) {
         guard isEnabled() else { stop(); return }
         for action in actions {
+            if handOff != nil, recordingRuntime.phase == .idle { continue }
             if shouldRequestMicrophonePermission(for: action) {
                 requestMicrophonePermissionForRecording()
                 continue

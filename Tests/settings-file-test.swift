@@ -36,6 +36,9 @@ struct SettingsFileTest {
         check(
             "emoji preferences and command controls are mirrored",
             Set(SettingsFileKey.available).isSuperset(of: [.emojiSkinTone, .emojiGridColumns, .emojiCommands]))
+        check("screen drawing options and shortcut are mirrored",
+            Set(SettingsFileKey.available).isSuperset(of: [.screenNotesTool, .screenNotesColor,
+                .screenNotesWidth, .screenNotesLifetime, .screenNotesShortcut]))
 
         var closed: Set<String> = []
         var current: String?
@@ -53,7 +56,7 @@ struct SettingsFileTest {
                 "appearance", "calculator", "search", "applications",
                 "systemSettings", "systemActions", "commands", "quicklinks", "appleShortcuts", "ai",
                 "quickActions", "fileSearch", "notes", "navigation",
-                "windowManagement", "emoji", "calendar", "extensions", "sounds"
+                "windowManagement", "emoji", "calendar", "extensions", "screenNotes", "sounds"
             ])
 
         // A file that could switch one of these on would grant what only the app may ask for.
@@ -61,7 +64,7 @@ struct SettingsFileTest {
             "extensions.enabled", "calendar.enabled", "spaces.enabled",
             "calendar.autoJoinMeetings", "calendar.cameraPreview", "quickActions.enabled",
             "ai.mcpEnabled", "mcp.enabled", "sounds.typingSoundsEnabled", "network.enabled",
-            "notifications.enabled", "mediaImport.enabled"
+            "notifications.enabled", "mediaImport.enabled", "screenNotes.enabled"
         ]
         check(
             "no capability grant has a settings.json key",

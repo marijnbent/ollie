@@ -20,7 +20,7 @@ struct PermissionsSettingsView: View {
                 SettingsSectionHeader(.permissionsAccessibility)
             }
             Section("Privacy") {
-                SettingsPermissionRow(title: "Microphone", subtitle: "Dictation",
+                SettingsPermissionRow(title: "Microphone", subtitle: "Dictation and screen notes",
                     status: dictation.permissions.microphonePermission.rawValue,
                     isGranted: dictation.permissions.microphonePermission.isGranted,
                     actionTitle: dictation.permissions.microphonePermission.isGranted ? "Open Settings…" : "Grant Access…") {
@@ -33,7 +33,7 @@ struct PermissionsSettingsView: View {
                             NSWorkspace.shared.open(url)
                         }
                     }
-                SettingsPermissionRow(title: "Screen Recording", subtitle: "Window previews",
+                SettingsPermissionRow(title: "Screen Recording", subtitle: "Window previews and screen notes",
                     status: screenRecording ? "Granted" : "Not granted", isGranted: screenRecording,
                     actionTitle: "Open Settings…") {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {

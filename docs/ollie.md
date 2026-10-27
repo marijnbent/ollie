@@ -11,7 +11,7 @@ Debug and the rendering harness have separate bundle identifiers and data direct
 
 `AppCore` owns ClipboardCoordinator, DictationCoordinator, WindowSwitcherCoordinator,
 TypingSoundsCoordinator, MediaImportCoordinator, NotificationsCoordinator, NetworkCoordinator,
-SpacesCoordinator, and CompactMenuController. The existing launcher and AI remain.
+SpacesCoordinator, ScreenNoteCoordinator, and CompactMenuController. The existing launcher and AI remain.
 New capture and monitoring capabilities start disabled and cannot be enabled by a settings import.
 Each switch controls its service lifecycle; the shared HealthTicker recovers input monitors after
 permissions change. Synthetic input carries the host Paster marker so it cannot trigger sounds or
@@ -28,7 +28,9 @@ Tab and Return consume the selection key and use the same replacement path. See
 commands, shortcut registration and action dispatch use it. Launcher owns its saved child options;
 Quick Actions and MCP require AI. Turning a parent off preserves those options without running them.
 Clipboard and Snippets share their panel but remain independent; Spaces shortcuts do not require
-Launcher. AppCore compares effective capabilities and applies only the changed coordinators.
+Launcher. Screen Notes has an independent switch; Explain Screen additionally requires Dictation.
+It hands speech back without auto-paste and copies annotated PNGs plus a note for pasting into AI.
+AppCore compares effective capabilities and applies only the changed coordinators.
 
 Every disable rejects new actions, removes input and background listeners, cancels pending work,
 closes feature surfaces and invalidates stale callbacks. Coordinators keep their own cleanup.

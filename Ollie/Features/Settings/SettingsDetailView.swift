@@ -20,6 +20,7 @@ struct SettingsDetailView: View {
             case .mediaImport: MediaImportSettingsView()
             case .notifications: NotificationsSettingsView()
             case .network: NetworkSettingsView()
+            case .screenNotes: ScreenNotesSettingsView()
             case .typingSounds: TypingSoundsSettingsView()
             case .general: GeneralSettingsView()
             case .applications: ApplicationsSettingsView()

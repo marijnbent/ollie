@@ -52,6 +52,7 @@ extension SettingsTab {
         switch self {
         case .quicklinks:
             [.createQuicklink, .searchQuicklinks, .importQuicklinks, .exportQuicklinks]
+        case .screenNotes: [.explainScreen, .drawOnScreen, .copyLastScreenNote, .copyLastScreenNoteText]
         case .clipboard: [.clipboardHistory]
         case .ai: [.quickAI, .aiChat]
         case .quickActions: [.fixGrammar, .rewrite, .translate, .summarize]

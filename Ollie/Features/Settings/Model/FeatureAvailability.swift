@@ -1,20 +1,20 @@
 enum OllieFeature: CaseIterable, Identifiable, Hashable, Sendable {
     case launcher, clipboard, snippets, dictation, windowSwitcher, spaces, ai
-    case typingSounds, network, notifications, mediaImport
+    case screenNotes, typingSounds, network, notifications, mediaImport
 
     var id: Self { self }
 }
 
 enum FeatureCapability: Hashable, Sendable, CaseIterable {
     case feature(OllieFeature)
-    case clipboardHistory, spaceNavigation
+    case clipboardHistory, spaceNavigation, screenExplanation
     case fileSearch, navigation, notes, calendar, extensions
     case customCommands, quicklinks, appleShortcuts, windowManagement
     case quickActions, mcp
 
     static var allCases: [Self] {
         OllieFeature.allCases.map(Self.feature) + [
-            .clipboardHistory, .spaceNavigation, .fileSearch, .navigation, .notes,
+            .clipboardHistory, .spaceNavigation, .screenExplanation, .fileSearch, .navigation, .notes,
             .calendar, .extensions, .customCommands, .quicklinks, .appleShortcuts,
             .windowManagement, .quickActions, .mcp,
         ]
@@ -25,6 +25,7 @@ enum FeatureCapability: Hashable, Sendable, CaseIterable {
         case .feature(let feature): feature
         case .clipboardHistory, .spaceNavigation: nil
         case .quickActions, .mcp: .ai
+        case .screenExplanation: .screenNotes
         default: .launcher
         }
     }
@@ -39,6 +40,8 @@ struct FeatureAvailability: Equatable, Sendable {
         case .feature(let feature): return enabledFeatures.contains(feature)
         case .clipboardHistory:
             return enabledFeatures.contains(.clipboard) || enabledFeatures.contains(.snippets)
+        case .screenExplanation:
+            return enabledFeatures.contains(.screenNotes) && enabledFeatures.contains(.dictation)
         case .spaceNavigation:
             return enabledFeatures.contains(.spaces) || allows(.windowManagement)
         default:

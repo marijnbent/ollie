@@ -2,6 +2,28 @@ import Foundation
 
 @MainActor
 final class PasteRuntimeTests {
+    func testHandOffPreservesHistoryWithoutTouchingClipboard() async {
+        let clock = ManualClock()
+        let pasteboard = FakePasteboardPort()
+        let verification = FakePasteVerificationPort()
+        let runtime = PasteRuntime(pasteboard: pasteboard, pasteVerification: verification,
+                                   scheduler: ManualScheduler(clock: clock), enhancer: { _, _, _ in "" })
+        var events: [PasteRuntimeEvent] = []
+        runtime.onEvent = { events.append($0) }
+        let outcome = await runtime.process(
+            session: FinalizedTranscriptSession(finalTranscript: "The button is clipped.", lastTranscript: "",
+                                                enhancementPrompt: nil, transcriptionError: nil),
+            settings: PasteRuntimeSettings(enhancement: nil, playSoundEffects: false,
+                                            restoreClipboardAfterPaste: true, delivery: .handOff))
+        assertEqual(outcome.text, "The button is clipped.")
+        assertTrue(outcome.recordingAdopted)
+        assertEqual(events.compactMap(historyEntry).first?.text, "The button is clipped.")
+        assertEqual(pasteboard.snapshotCallCount, 0)
+        assertTrue(pasteboard.writtenStrings.isEmpty && pasteboard.restoredSnapshots.isEmpty)
+        assertEqual(pasteboard.sendPasteCommandCallCount, 0)
+        assertEqual(verification.prepareCallCount, 0)
+    }
+
     func testPasteKeepsClipboardByDefaultAfterAutoPaste() async {
         let clock = ManualClock()
         let scheduler = ManualScheduler(clock: clock)
@@ -35,7 +57,7 @@ final class PasteRuntimeTests {
             )
         )
 
-        assertTrue(recordingAdopted)
+        assertTrue(recordingAdopted.recordingAdopted)
         assertEqual(pasteboard.writtenStrings.last, "hello world")
         assertEqual(pasteboard.sendPasteCommandCallCount, 1)
         assertTrue(pasteboard.restoredSnapshots.isEmpty)
@@ -207,7 +229,7 @@ final class PasteRuntimeTests {
         await Task.yield()
         task.cancel()
         let recordingAdopted = await task.value
-        assertTrue(!recordingAdopted)
+        assertTrue(!recordingAdopted.recordingAdopted)
 
         assertTrue(pasteboard.writtenStrings.isEmpty)
         assertEqual(pasteboard.sendPasteCommandCallCount, 0)

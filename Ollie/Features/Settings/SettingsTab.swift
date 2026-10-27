@@ -1,8 +1,8 @@
 enum SettingsTab: CaseIterable, Identifiable {
-    case features, shortcuts, dictation, windowSwitcher, spaces, clipboard, snippets, mediaImport, notifications, network, typingSounds, general, applications, systemSettings, systemActions, commands, quicklinks, appleShortcuts,
+    case features, shortcuts, dictation, windowSwitcher, spaces, clipboard, snippets, mediaImport, notifications, network, typingSounds, screenNotes, general, applications, systemSettings, systemActions, commands, quicklinks, appleShortcuts,
         fallbacks, fileSearch, windowManagement, navigation, notes, calendar, emoji,
         ai, quickActions, extensions, permissions, backup, about
-    static let available: [Self] = [.features, .general, .shortcuts, .applications, .clipboard, .snippets, .dictation, .windowSwitcher, .spaces, .emoji, .ai, .typingSounds, .network, .notifications, .mediaImport, .permissions, .backup, .about]
+    static let available: [Self] = [.features, .general, .shortcuts, .applications, .clipboard, .snippets, .dictation, .windowSwitcher, .spaces, .emoji, .ai, .screenNotes, .typingSounds, .network, .notifications, .mediaImport, .permissions, .backup, .about]
 
     /// The case, never an index: a selectable `List` flattens section and row IDs together.
     var id: Self { self }
@@ -19,6 +19,7 @@ enum SettingsTab: CaseIterable, Identifiable {
         case .mediaImport: return "Media Import"
         case .notifications: return "Notifications"
         case .network: return "Network"
+        case .screenNotes: return "Screen Notes"
         case .typingSounds: return "Typing Sounds"
         case .general: return "General"
         case .applications: return "Applications"
@@ -55,6 +56,7 @@ enum SettingsTab: CaseIterable, Identifiable {
         case .mediaImport: return "externaldrive.badge.plus"
         case .notifications: return "bell"
         case .network: return "network"
+        case .screenNotes: return "scribble.variable"
         case .typingSounds: return "speaker.wave.2"
         case .general: return "switch.2"
         case .applications: return "square.grid.2x2"
@@ -93,7 +95,7 @@ enum SettingsSection: CaseIterable, Identifiable {
 
     var tabs: [SettingsTab] {
         switch self {
-        case .app: [.features, .general, .shortcuts, .applications, .clipboard, .snippets, .dictation, .windowSwitcher, .spaces, .emoji, .ai, .typingSounds, .network, .notifications, .mediaImport]
+        case .app: [.features, .general, .shortcuts, .applications, .clipboard, .snippets, .dictation, .windowSwitcher, .spaces, .emoji, .ai, .screenNotes, .typingSounds, .network, .notifications, .mediaImport]
         case .advanced: [.permissions, .backup, .about]
         }
     }
@@ -110,6 +112,7 @@ extension OllieFeature {
         case .windowSwitcher: .windowSwitcher
         case .spaces: .spaces
         case .ai: .ai
+        case .screenNotes: .screenNotes
         case .typingSounds: .typingSounds
         case .network: .network
         case .notifications: .notifications
@@ -144,6 +147,7 @@ extension SettingsTab {
         case .windowSwitcher: .feature(.windowSwitcher)
         case .spaces: .feature(.spaces)
         case .ai: .feature(.ai)
+        case .screenNotes: .feature(.screenNotes)
         case .typingSounds: .feature(.typingSounds)
         case .network: .feature(.network)
         case .notifications: .feature(.notifications)

@@ -27,9 +27,11 @@ struct FinalizedTranscriptSession {
 }
 
 struct PasteRuntimeSettings {
+    enum Delivery { case paste, handOff }
     let enhancement: EnhancementProviderSettings?
     let playSoundEffects: Bool
     let restoreClipboardAfterPaste: Bool
+    var delivery: Delivery = .paste
 }
 
 enum PasteRuntimeEvent {
@@ -42,6 +44,10 @@ enum PasteRuntimeEvent {
 
 @MainActor
 final class PasteRuntime {
+    struct Outcome {
+        let recordingAdopted: Bool
+        let text: String?
+    }
     typealias Enhancer = @Sendable (
         _ transcript: String,
         _ prompt: String,
@@ -83,9 +89,10 @@ final class PasteRuntime {
     }
 
     @discardableResult
-    func process(session: FinalizedTranscriptSession, settings: PasteRuntimeSettings) async -> Bool {
-        guard !Task.isCancelled else { return false }
+    func process(session: FinalizedTranscriptSession, settings: PasteRuntimeSettings) async -> Outcome {
+        guard !Task.isCancelled else { return Outcome(recordingAdopted: false, text: nil) }
         var recordingAdopted = false
+        var deliveredText: String?
         cancelPendingVerification()
         let finalText = session.finalTranscript.trimmed
         let fallbackText = session.lastTranscript.trimmed
@@ -108,7 +115,7 @@ final class PasteRuntime {
             if settings.playSoundEffects || session.transcriptionError != nil {
                 emit(.playSound(session.transcriptionError != nil ? "Basso" : "Pop"))
             }
-            return true
+            return Outcome(recordingAdopted: true, text: nil)
         }
 
         defer {
@@ -190,12 +197,6 @@ final class PasteRuntime {
             try Task.checkCancellation()
 
             let textToPaste = enhancedText ?? rawText
-            let snapshot = settings.restoreClipboardAfterPaste ? pasteboard.snapshot() : nil
-            let preparedVerification = settings.restoreClipboardAfterPaste
-                ? pasteVerification.prepare(expectedText: textToPaste)
-                : nil
-            pasteboard.writeString(textToPaste)
-            writtenChangeToken = pasteboard.changeToken
 
             emit(.historyEntry(
                 TranscriptHistoryEntry(
@@ -214,6 +215,19 @@ final class PasteRuntime {
                 )
             ))
             recordingAdopted = true
+            deliveredText = textToPaste
+
+            if settings.delivery == .handOff {
+                emit(.status(.idle))
+                return Outcome(recordingAdopted: true, text: textToPaste)
+            }
+
+            let snapshot = settings.restoreClipboardAfterPaste ? pasteboard.snapshot() : nil
+            let preparedVerification = settings.restoreClipboardAfterPaste
+                ? pasteVerification.prepare(expectedText: textToPaste)
+                : nil
+            pasteboard.writeString(textToPaste)
+            writtenChangeToken = pasteboard.changeToken
 
             if let transcriptionError = session.transcriptionError {
                 emit(.log("Transcript completed with warning: \(transcriptionError)", .warning))
@@ -239,7 +253,7 @@ final class PasteRuntime {
                 if settings.playSoundEffects || enhancementFailed {
                     emit(.playSound(enhancementFailed ? "Basso" : "Pop"))
                 }
-                return recordingAdopted
+                return Outcome(recordingAdopted: recordingAdopted, text: deliveredText)
             }
 
             emit(.log("Paste command sent (Cmd+V).", .info))
@@ -248,10 +262,12 @@ final class PasteRuntime {
                 emit(.playSound(enhancementFailed ? "Basso" : "Pop"))
             }
 
-            guard settings.restoreClipboardAfterPaste, let snapshot else { return recordingAdopted }
+            guard settings.restoreClipboardAfterPaste, let snapshot else {
+                return Outcome(recordingAdopted: recordingAdopted, text: deliveredText)
+            }
             guard let preparedVerification else {
                 emit(.log("Could not confirm auto-paste. Kept transcript on the clipboard.", .warning))
-                return recordingAdopted
+                return Outcome(recordingAdopted: recordingAdopted, text: deliveredText)
             }
 
             schedulePasteVerification(
@@ -266,7 +282,7 @@ final class PasteRuntime {
             emit(.status(.cancelled))
             emit(.log("Recording cancelled.", .info))
         }
-        return recordingAdopted
+        return Outcome(recordingAdopted: recordingAdopted, text: deliveredText)
     }
 
     private func emit(_ event: PasteRuntimeEvent) {

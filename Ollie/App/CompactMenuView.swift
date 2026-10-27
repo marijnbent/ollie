@@ -12,6 +12,19 @@ struct CompactMenuView: View {
                 Text(Bundle.main.appDisplayName).font(.system(size: 13, weight: .medium))
                 Spacer()
                 Menu {
+                    if core.settings.allows(.screenExplanation) {
+                        Button("Explain Screen", systemImage: "mic.badge.plus") { perform { core.screenNotes.explain() } }
+                    }
+                    if core.settings.allows(.feature(.screenNotes)) {
+                        if core.screenNotes.lastNote != nil {
+                            Button("Copy Last Screen Note") { perform { core.screenNotes.copyLastNote() } }
+                            Button("Copy Last Note Text") { perform { core.screenNotes.copyLastNote(textOnly: true) } }
+                        }
+                        Button("Draw on Screen", systemImage: "scribble.variable") {
+                            perform { core.screenNotes.toggle() }
+                        }
+                        Divider()
+                    }
                     Button("Check for Updates…") { perform { core.updateCoordinator.checkForUpdates() } }
                     Button("About \(Bundle.main.appDisplayName)") { perform { core.settingsCoordinator.showAbout() } }
                     Divider()

@@ -8,6 +8,7 @@ extension OllieFeature {
         case .windowSwitcher: \.windowSwitcherEnabled
         case .spaces: \.spacesEnabled
         case .ai: \.aiEnabled
+        case .screenNotes: \.screenNotesEnabled
         case .typingSounds: \.typingSoundsEnabled
         case .network: \.networkEnabled
         case .notifications: \.notificationsEnabled
@@ -39,6 +40,7 @@ extension CommandID {
     var capability: FeatureCapability? {
         switch self {
         case .clipboardHistory: .clipboardHistory
+        case .explainScreen: .screenExplanation
         case .exportSettings, .importSettings, .importFromRaycast, .checkForUpdates,
              .settings, .about, .support, .restart, .quit: nil
         default: owner?.capability ?? .feature(.launcher)

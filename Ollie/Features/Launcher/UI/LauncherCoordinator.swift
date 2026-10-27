@@ -177,6 +177,18 @@ final class LauncherCoordinator {
             fileSearchCoordinator.show()
         case .searchMenuItems:
             menuSearchCoordinator.show()
+        case .explainScreen:
+            dismissPalette()
+            core.screenNotes.explain()
+        case .copyLastScreenNote:
+            dismissPalette()
+            core.screenNotes.copyLastNote()
+        case .copyLastScreenNoteText:
+            dismissPalette()
+            core.screenNotes.copyLastNote(textOnly: true)
+        case .drawOnScreen:
+            dismissPalette()
+            core.screenNotes.toggle()
         case .openCamera:
             dismissPalette()
             Task { await core.cameraCoordinator.show() }

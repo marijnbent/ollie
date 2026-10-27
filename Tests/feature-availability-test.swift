@@ -9,6 +9,7 @@ final class AppSettings {
     var windowSwitcherEnabled = false
     var spacesEnabled = false
     var aiEnabled = false
+    var screenNotesEnabled = false
     var typingSoundsEnabled = false
     var networkEnabled = false
     var notificationsEnabled = false
@@ -76,11 +77,24 @@ struct FeatureAvailabilityTests {
                 precondition(availability.allows(.feature(other)) == (feature == other))
             }
             for capability in FeatureCapability.allCases where capability.owner != nil {
-                precondition(availability.allows(capability) == (capability.owner == feature))
+                let expected = capability == .screenExplanation ? false : capability.owner == feature
+                precondition(availability.allows(capability) == expected)
             }
             settings[keyPath: feature.enabledKeyPath] = false
         }
 
+        settings.screenNotesEnabled = true
+        precondition(settings.allows(.feature(.screenNotes)))
+        precondition(HotKeyAction.command(.drawOnScreen).capability == .feature(.screenNotes))
+        precondition(CommandID.drawOnScreen.owner == .screenNotes)
+        precondition(!settings.allows(.feature(.launcher)))
+        precondition(!settings.allows(.screenExplanation))
+        settings.dictationEnabled = true
+        precondition(settings.allows(.screenExplanation))
+        precondition(HotKeyAction.command(.explainScreen).capability == .screenExplanation)
+        settings.dictationEnabled = false
+        precondition(!settings.allows(.screenExplanation))
+        settings.screenNotesEnabled = false
         settings.snippetsEnabled = true
         precondition(settings.allows(.clipboardHistory))
         precondition(!settings.allows(.feature(.clipboard)))

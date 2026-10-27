@@ -178,6 +178,7 @@ final class RecordingRuntime {
     var onRequestOpenSettings: (() -> Void)?
     var onMuteForRecording: (() -> Void)?
     var onRestoreMute: (() -> Void)?
+    var onAbandoned: (() -> Void)?
 
     init(
         audioCapture: AudioCapturePort,
@@ -291,6 +292,10 @@ final class RecordingRuntime {
         cancelRecording()
     }
 
+    func startUnenhanced(ownerShortcutID: UUID) {
+        startRecording(ownerShortcutID: ownerShortcutID, ownerMode: .click, isLatched: true, enhance: false)
+    }
+
     func changeTranscriptionLanguage(to language: DeepgramLanguage) {
         guard phase == .recording else { return }
         guard let format = currentRecordingFormat else { return }
@@ -308,7 +313,7 @@ final class RecordingRuntime {
         onLog?("Language changed to \(normalizedLanguage.displayName).", .info)
     }
 
-    private func startRecording(ownerShortcutID: UUID, ownerMode: ShortcutMode, isLatched: Bool) {
+    private func startRecording(ownerShortcutID: UUID, ownerMode: ShortcutMode, isLatched: Bool, enhance: Bool = true) {
         guard phase == .idle else { return }
 
         let transcriptionSettings = transcriptionSettingsProvider()
@@ -336,10 +341,10 @@ final class RecordingRuntime {
 
         let activeApplication = activeApplicationProvider()
         currentActiveApplication = activeApplication
-        pendingEnhancementPrompt = resolvedEnhancementPromptProvider(
+        pendingEnhancementPrompt = enhance ? resolvedEnhancementPromptProvider(
             ownerShortcutID,
             activeApplication?.bundleIdentifier
-        )
+        ) : nil
         let transcriptionLanguage = resolvedTranscriptionLanguageProvider(activeApplication?.bundleIdentifier)
         pendingTranscriptionLanguage = transcriptionLanguage
 
@@ -509,7 +514,8 @@ final class RecordingRuntime {
             self.finishActiveSession(
                 disconnectTranscriptionStream: true,
                 clearPendingTranscriptionError: false,
-                hideOverlay: false
+                hideOverlay: false,
+                abandoned: false
             )
             self.onFinalizeRequested?(finalization)
         }
@@ -660,7 +666,8 @@ final class RecordingRuntime {
     private func finishActiveSession(
         disconnectTranscriptionStream: Bool,
         clearPendingTranscriptionError: Bool,
-        hideOverlay: Bool
+        hideOverlay: Bool,
+        abandoned: Bool = true
     ) {
         let sessionID = ownership?.sessionID
         cancelPendingStop()
@@ -717,6 +724,7 @@ final class RecordingRuntime {
             pendingTranscriptionError = nil
             hasPlayedTranscriptionFailureSound = false
         }
+        if abandoned, sessionID != nil { onAbandoned?() }
     }
 
     private func playSound(_ name: String) {

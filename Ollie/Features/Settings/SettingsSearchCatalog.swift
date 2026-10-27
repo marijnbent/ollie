@@ -118,8 +118,8 @@ enum SettingsSearchCatalog {
     // Pane order, then section order within a pane, so this reads as a table of contents.
 
     static let entries: [SettingsSearchEntry] =
-        general + applications + emoji + ai + permissions + backup + about
-        + [.init(pane: .features, keywords: ["enable", "disable", "launcher", "clipboard", "snippets", "dictation", "window switcher", "spaces", "strafe", "AI", "typing sounds", "network", "notifications", "media import"]),
+        general + applications + screenNotes + emoji + ai + permissions + backup + about
+        + [.init(pane: .features, keywords: ["enable", "disable", "launcher", "clipboard", "snippets", "dictation", "window switcher", "spaces", "strafe", "screen drawing", "annotation", "AI", "typing sounds", "network", "notifications", "media import"]),
            .init(pane: .shortcuts, keywords: ["keyboard", "hotkeys", "bindings"]),
            .init(pane: .dictation, keywords: ["talkie", "speech", "microphone", "transcription", "mercury", "inception"]),
            .init(pane: .windowSwitcher, keywords: ["tabbie", "command tab", "windows"])]
@@ -192,6 +192,15 @@ enum SettingsSearchCatalog {
         .init(
             group: .applicationsApplications, "Aliases and shortcuts",
             keywords: ["alias", "hotkey", "per app", "hide"])
+    ]
+
+    private static let screenNotes: [SettingsSearchEntry] = [
+        .init(pane: .screenNotes, keywords: ["scrawl", "annotate", "pen", "ink", "temporary", "drawing", "explain screen", "screenshot", "dictation", "narrate"]),
+        .init(group: .screenNotesCommands, "Screen note commands", keywords: ["shortcut", "hotkey"]),
+        .init(.screenNotesInk, "Tool", keywords: ["pen", "arrow"]),
+        .init(.screenNotesInk, "Color", keywords: ["colour", "red", "yellow", "blue", "green"]),
+        .init(.screenNotesInk, "Width", keywords: ["thickness", "size"]),
+        .init(.screenNotesInk, "Drawing-only auto-clear", keywords: ["fade", "temporary", "seconds", "auto clear"]),
     ]
 
     private static let emoji: [SettingsSearchEntry] = [

@@ -126,6 +126,10 @@ Extension menu extras remain owned by `ExtensionManager`.
   top edge drifts on the compact↔expanded swap. The panel auto-dismisses on `windowDidResignKey`,
   unless a modal panel holds key.
   See [features/palette.md](features/palette.md).
+- **Screen notes** — `ScreenNoteCoordinator` owns finite narrated screenshot sessions and temporary
+  ink, using Dictation's hand-off delivery. A separate nonactivating toolbar remains interactive while
+  the selected display's canvas lets mouse input through. Drawing-only mode covers every display.
+  See [screen notes](features/screen-notes.md).
 - **Settings and Onboarding** — titled `NSWindow`s, one `Windows/AppWindowController.swift` each, owned
   by `SettingsCoordinator` and `OnboardingCoordinator`. SwiftUI `Settings` and `Window` scenes are
   unreliable for accessory apps, so this is deliberate. Their lifecycles are independent of the

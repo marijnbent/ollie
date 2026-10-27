@@ -13,6 +13,41 @@ final class RecordingRuntimeTests {
         let rawRecordingCapture: FakeRawRecordingCapture
     }
 
+    func testUnenhancedRecordingReportsEveryAbandonedExit() async {
+        for exit in ["cancel", "discard", "start failure", "input change", "finalize"] {
+            var promptCalls = 0
+            let harness = makeHarness(resolvedEnhancementPromptProvider: { _, _ in
+                promptCalls += 1
+                return EnhancementPromptContext(name: "Email", content: "Rewrite as a formal email.", isForActiveApp: true)
+            })
+            var abandoned = 0
+            harness.runtime.onAbandoned = { abandoned += 1 }
+            harness.audio.shouldFailStart = exit == "start failure"
+            harness.runtime.startUnenhanced(ownerShortcutID: UUID())
+            if exit == "start failure" {
+                await waitUntil { abandoned == 1 }
+            } else {
+                await waitUntil { harness.deepgram.connectCalls.count == 1 }
+                switch exit {
+                case "cancel": harness.runtime.cancelFromEsc()
+                case "discard": harness.runtime.handle(action: .discard)
+                case "input change":
+                    harness.audio.emitConfigurationChange()
+                    await waitUntil { abandoned == 1 }
+                default:
+                    harness.runtime.handle(action: .stop)
+                    await waitUntil { harness.deepgram.closeStreamCallCount == 1 }
+                    harness.deepgram.completeClose()
+                    await waitUntil { harness.finalizations.value.count == 1 }
+                    assertNil(harness.finalizations.value.first?.enhancementPrompt)
+                }
+            }
+            assertEqual(abandoned, exit == "finalize" ? 0 : 1, exit)
+            assertEqual(promptCalls, 0)
+            await harness.runtime.waitForShutdown()
+        }
+    }
+
     func testReconnectsOnceThenStopsRetryingAndFinalizes() async {
         let harness = makeHarness()
 
