@@ -34,6 +34,7 @@ final class ScreenNoteCoordinator {
     @ObservationIgnored private var limitShown = false
 
     var isActive: Bool { phase != .idle }
+    var audioMeter: AudioMeterState { core.dictation.session.audioMeter }
 
     init(core: AppCore) { self.core = core }
 
@@ -371,10 +372,9 @@ final class ScreenNoteCoordinator {
         let host = NSHostingView(rootView: ScreenNoteToolbar().environment(self))
         host.sizingOptions = []
         panel.contentView = host
-        let size = Theme.Size.screenNotesToolbar
-        panel.setFrame(NSRect(x: toolbarScreen.visibleFrame.midX - size.width / 2,
-                              y: toolbarScreen.visibleFrame.maxY - size.height - Theme.Spacing.xl,
-                              width: size.width, height: size.height), display: false)
+        panel.hasShadow = true
+        panel.setFrame(core.dictation.settings.overlayPosition.frame(size: Theme.Size.screenNotesToolbar,
+                                                                     on: toolbarScreen), display: false)
         panel.orderFrontRegardless()
         toolbar = panel
     }

@@ -402,7 +402,7 @@ private struct TranscriptWordLayout: Layout {
     }
 }
 
-private struct OverlayCardSurface: ViewModifier {
+struct OverlayCardSurface: ViewModifier {
     let cornerRadius: CGFloat
     @Environment(\.colorScheme) private var colorScheme
 
@@ -442,64 +442,59 @@ private struct OverlayCardSurface: ViewModifier {
 }
 
 private struct LanguageCycleButton: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var isHovered = false
     let language: DeepgramLanguage
     let action: () -> Void
 
-    private var reduceTransparency: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
-    }
-
-    @ViewBuilder
     var body: some View {
-        if #available(macOS 26.0, *), !reduceTransparency {
-            button
-                .glassEffect(
-                    .clear.interactive(),
-                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-                )
-        } else {
-            button
-                .background(fallbackBackground)
-                .animation(.easeOut(duration: 0.12), value: isHovered)
-                .onHover { isHovered = $0 }
-        }
-    }
-
-    private var button: some View {
         Button(action: action) {
-            Group {
-                if language == .automatic {
-                    Image(systemName: "globe")
-                        .font(.system(size: 13, weight: .medium))
-                } else {
-                    Text(language.menuBarAbbreviation)
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
+            if language == .automatic {
+                Image(systemName: "globe")
+                    .font(.system(size: 13, weight: .medium))
+            } else {
+                Text(language.menuBarAbbreviation)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
-            .frame(width: 24, height: 24)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.primary.opacity(colorScheme == .dark ? 0.88 : 0.66))
+        .buttonStyle(RecorderWidgetButtonStyle())
         .help("Language: \(language.displayName)")
         .accessibilityLabel("Transcription language")
         .accessibilityValue(language.displayName)
     }
+}
 
-    private var fallbackBackground: some View {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(
-                Color.primary.opacity(
-                    isHovered
-                        ? (colorScheme == .dark ? 0.14 : 0.08)
-                        : (colorScheme == .dark ? 0.07 : 0.035)
-                )
-            )
+struct RecorderWidgetButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        RecorderWidgetButtonLabel(label: configuration.label)
+    }
+}
+
+private struct RecorderWidgetButtonLabel: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered = false
+    let label: ButtonStyleConfiguration.Label
+    private let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+
+    @ViewBuilder
+    var body: some View {
+        let control = label
+            .frame(width: 24, height: 24)
+            .contentShape(shape)
+            .foregroundStyle(Color.primary.opacity(colorScheme == .dark ? 0.88 : 0.66))
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency {
+            control
+                .background(shape.fill(Color.primary.opacity(fallbackOpacity)))
+                .animation(.easeOut(duration: 0.12), value: isHovered)
+                .onHover { isHovered = $0 }
+        } else {
+            control.glassEffect(.clear.interactive(), in: shape)
+        }
+    }
+
+    private var fallbackOpacity: Double {
+        isHovered ? (colorScheme == .dark ? 0.14 : 0.08) : (colorScheme == .dark ? 0.07 : 0.035)
     }
 }
 
@@ -588,7 +583,7 @@ private struct OverlayAppIcon: View {
     }
 }
 
-private struct RecordingStatusOrb: View {
+struct RecordingStatusOrb: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var audioMeter: AudioMeterState
     let isEnhancing: Bool

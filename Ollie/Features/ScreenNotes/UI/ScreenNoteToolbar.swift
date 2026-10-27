@@ -2,31 +2,41 @@ import SwiftUI
 
 struct ScreenNoteToolbar: View {
     @Environment(ScreenNoteCoordinator.self) private var note
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appear = false
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
-            Image(systemName: "record.circle.fill").foregroundStyle(Color(cgColor: ScreenInk.color))
-                .accessibilityLabel("Recording")
+            RecordingStatusOrb(audioMeter: note.audioMeter, isEnhancing: false)
             Text("\(note.shotCount)").monospacedDigit()
+                .foregroundStyle(Color.primary.opacity(colorScheme == .dark ? 0.88 : 0.66))
+                .frame(minWidth: Theme.Size.screenNotesCount)
                 .accessibilityLabel("\(note.shotCount) screenshots")
-            Spacer(minLength: 0)
-            button("Cancel", symbol: "xmark") { note.stop() }
-            button("Finish and copy", symbol: "checkmark") { note.finishNote() }
+            HStack(spacing: Theme.Spacing.xs) {
+                button("Cancel", symbol: "xmark") { note.stop() }
+                button("Finish and copy", symbol: "checkmark") { note.finishNote() }
+            }
         }
-        .buttonStyle(.plain)
-        .font(.system(size: Theme.Size.screenNotesFont, weight: .medium))
-        .padding(Theme.Spacing.md)
-        .glassEffect(.regular, in: Capsule())
+        .font(.system(size: Theme.Size.screenNotesFont, weight: .medium, design: .rounded))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, Theme.Spacing.xl)
+        .modifier(OverlayCardSurface(cornerRadius: 17))
+        .scaleEffect(appear ? 1 : 0.96)
+        .opacity(appear ? 1 : 0)
+        .offset(y: appear ? 0 : -8)
+        .onAppear {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.72, blendDuration: 0.2)) {
+                appear = true
+            }
+        }
         .help("Hold ⌥ and drag to mark; use the shortcut again to finish")
     }
 
     private func button(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .frame(width: Theme.Size.screenNotesControl, height: Theme.Size.screenNotesControl)
-                .contentShape(Rectangle())
-        }
-        .help(title)
-        .accessibilityLabel(title)
+        Button(action: action) { Image(systemName: symbol) }
+            .buttonStyle(RecorderWidgetButtonStyle())
+            .help(title)
+            .accessibilityLabel(title)
     }
 }

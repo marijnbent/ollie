@@ -214,19 +214,8 @@ final class DictationOverlayController {
     }
 
     private func targetFrame(screen: NSScreen) -> CGRect {
-        let fullFrame = screen.frame
-        let visibleFrame = screen.visibleFrame
-        let width = min(overlayWidth, fullFrame.width - 80)
-        let height = overlayHeight
-        let x = fullFrame.midX - width / 2
-        let y: CGFloat
-        switch settingsStore.overlayPosition {
-        case .top:
-            y = visibleFrame.maxY - height - 28
-        case .bottom:
-            y = visibleFrame.minY + 28
-        }
-        return CGRect(x: x, y: y, width: width, height: height)
+        let size = CGSize(width: min(overlayWidth, screen.frame.width - 80), height: overlayHeight)
+        return settingsStore.overlayPosition.frame(size: size, on: screen)
     }
 
     private var overlayWidth: CGFloat {
@@ -270,5 +259,15 @@ final class DictationOverlayController {
             y = visibleFrame.minY - height - 8
         }
         return CGRect(x: x, y: y, width: width, height: height)
+    }
+}
+
+extension OverlayPosition {
+    func frame(size: CGSize, on screen: NSScreen) -> CGRect {
+        let y = switch self {
+        case .top: screen.visibleFrame.maxY - size.height - 28
+        case .bottom: screen.visibleFrame.minY + 28
+        }
+        return CGRect(origin: CGPoint(x: screen.frame.midX - size.width / 2, y: y), size: size)
     }
 }

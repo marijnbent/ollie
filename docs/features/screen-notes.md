@@ -24,7 +24,8 @@ Enable **Screen Notes** and configure **Dictation** in Settings → Features. Bi
 Settings → Screen Notes. The same command is available in the launcher and menu bar.
 
 Press the shortcut to start talking. Ollie takes a clean screenshot of the display under the pointer
-and shows a small recording pill with a screenshot count, Cancel and Finish.
+and shows a recording widget there with Dictation's glass card, live audio orb and Widget position,
+plus a screenshot count, Cancel and Finish. Dictation's own widget stays hidden during the session.
 
 Hold **⌥ and drag** to draw a red marker on any display. Each completed drag saves one annotated
 screenshot automatically and fades the marker. A circle, underline or dot is enough; there are no
