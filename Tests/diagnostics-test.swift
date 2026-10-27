@@ -19,13 +19,20 @@ import Foundation
         func duration() -> Double { evaluated += 1; return 1 }
         clipboard.info(detail())
         clipboard.benchmark("test", durationMilliseconds: duration(), details: detail())
+        clipboard.latency("clipboard.fast", milliseconds: 1, threshold: 100, details: detail())
         precondition(evaluated == 0)
+        clipboard.latency("clipboard.slow", milliseconds: 100, threshold: 100, details: detail())
+        precondition(evaluated == 1)
+        clipboard.latency("clipboard.invalid", milliseconds: .nan, threshold: 100, details: detail())
+        clipboard.latency("clipboard.invalid", milliseconds: -1, threshold: 100, details: detail())
+        clipboard.latency("clipboard.wait", milliseconds: 300, threshold: .infinity, details: detail())
+        precondition(evaluated == 1)
         var workCount = 0
         let result = switcher.measure(detail()) { workCount += 1; return 42 }
-        precondition(result == 42 && workCount == 1 && evaluated == 0)
+        precondition(result == 42 && workCount == 1 && evaluated == 1)
         switcher.warning("test.warning", details: detail())
         switcher.error("test.error", details: detail())
-        precondition(evaluated == 2)
+        precondition(evaluated == 3)
         for enabled in [false, true, false] {
             defaults.set(enabled, forKey: key)
             precondition(clipboard.isEnabled == enabled && switcher.isEnabled == enabled)

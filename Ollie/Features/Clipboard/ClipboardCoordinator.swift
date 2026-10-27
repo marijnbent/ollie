@@ -99,6 +99,23 @@ final class ClipboardCoordinator: HealthCheckable {
 
     var snippetsEnabled: Bool { core.settings.snippetsEnabled }
 
+    var navigationDiagnostics: ClipboardNavigationDiagnostics { core.clipboardNavigationDiagnostics }
+
+    func noteKeyboardSelection() {
+        let selection = core.palette.selection
+        let rows = results(for: core.palette.query)
+        guard rows.indices.contains(selection) else { return }
+        let result = rows[selection]
+        switch result {
+        case .item(let item):
+            navigationDiagnostics.selected(id: result.id, index: selection,
+                                           kind: item.type == .image ? .image : .text,
+                                           fileBacked: item.isFileBacked)
+        case .snippet:
+            navigationDiagnostics.selected(id: result.id, index: selection, kind: .snippet, fileBacked: false)
+        }
+    }
+
     func results(for query: String) -> [ClipboardResult] {
         if query.hasPrefix(">") {
             guard core.settings.snippetsEnabled else { return [] }
@@ -149,6 +166,7 @@ final class ClipboardCoordinator: HealthCheckable {
     }
 
     func paletteDidHide() {
+        navigationDiagnostics.stop()
         pendingActivation = nil
         searchSession.cancel()
         expandedImage = nil
@@ -297,6 +315,7 @@ final class ClipboardCoordinator: HealthCheckable {
     func healthCheck() { if !expansion.isRunning { applyExpansion() } }
 
     func stop() {
+        navigationDiagnostics.stop()
         watcher.stopWatching()
         expansion.stop()
         ticker.unsubscribe(self)

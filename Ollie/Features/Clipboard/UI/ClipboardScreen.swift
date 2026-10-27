@@ -127,6 +127,9 @@ private struct ClipboardPaletteView: View {
                 .hideNativeScrollers()
                 .thinScrollbar()
                 .scrollFollowsSelection(scroll, row: selected?.id, atOrigin: selected?.id == rows.first?.id, proxy: proxy)
+                .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, _ in
+                    coordinator.navigationDiagnostics.scrolled()
+                }
             }
             .overlay {
                 if rows.isEmpty {
@@ -150,6 +153,7 @@ private struct ClipboardPaletteView: View {
         .onChange(of: coordinator.snippets.snippets) { coordinator.snippetsChanged() }
         .onChange(of: coordinator.store.isLoaded) { coordinator.refreshSearch() }
         .onAppear { coordinator.refreshSearch() }
+        .onDisappear { coordinator.navigationDiagnostics.stop() }
     }
 
     @ViewBuilder
@@ -285,7 +289,8 @@ private struct ClipboardPalettePreview: View {
             image = nil
             error = nil
             hasMore = false
-            await load()
+            let navigation = result.flatMap { coordinator.navigationDiagnostics.preview(for: $0.id) }
+            await load(navigation: navigation)
         }
         .task(id: limit) { if limit > 2_000 { await load() } }
     }
@@ -301,10 +306,23 @@ private struct ClipboardPalettePreview: View {
         }
     }
 
-    private func load() async {
+    private func load(navigation: ClipboardNavigationDiagnostics.Navigation? = nil) async {
         guard let result else { return }
+        let diagnostics = coordinator.navigationDiagnostics
+        let start = diagnostics.time()
+        var intentionalWait = 0.0
+        if let navigation {
+            diagnostics.record(.previewStart, milliseconds: diagnostics.elapsed(since: navigation.started),
+                               navigation: navigation)
+        }
         loading = true
-        defer { loading = false }
+        defer {
+            loading = false
+            let duration = ClipboardNavigationDiagnostics.previewWorkMilliseconds(
+                total: diagnostics.elapsed(since: start), waited: intentionalWait)
+            diagnostics.record(.previewReady, milliseconds: duration,
+                               navigation: navigation, outcome: Task.isCancelled ? .cancelled : .completed)
+        }
         switch result {
         case .snippet(let snippet):
             text = String(snippet.content.prefix(limit))
@@ -312,17 +330,39 @@ private struct ClipboardPalettePreview: View {
         case .item(let item):
             let storage = coordinator.store.storage
             if item.type == .image {
+                let decodeStart = diagnostics.time()
                 let loaded = await storage.imageCache.preview(for: item)
+                let outcome: ClipboardNavigationDiagnostics.Outcome =
+                    Task.isCancelled ? .cancelled : loaded == nil ? .unavailable : .completed
+                diagnostics.record(.previewImage, milliseconds: diagnostics.elapsed(since: decodeStart),
+                                   navigation: navigation, outcome: outcome)
                 guard !Task.isCancelled else { return }
                 image = loaded
                 if loaded == nil { error = "Image unavailable" }
             } else {
                 if deferLoading && (item.isFileBacked || (item.textContent?.count ?? 0) > 1_000) {
-                    do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+                    let waitStart = diagnostics.time()
+                    do {
+                        try await Task.sleep(for: .milliseconds(ClipboardNavigationDiagnostics.previewWaitMilliseconds))
+                    } catch {
+                        intentionalWait = diagnostics.elapsed(since: waitStart)
+                        diagnostics.record(.previewWait, milliseconds: intentionalWait,
+                                           navigation: navigation, outcome: .cancelled)
+                        return
+                    }
+                    intentionalWait = diagnostics.elapsed(since: waitStart)
+                    diagnostics.record(.previewWait, milliseconds: intentionalWait, navigation: navigation)
                 }
                 let source = storage.textChunkSource(for: item)
                 let count = limit
-                let chunk = await Task.detached(priority: .utility) { ClipboardStorage.readTextChunk(from: source, charCount: count) }.value
+                let readStart = diagnostics.time()
+                let chunk = await Task.detached(priority: .utility) {
+                    ClipboardStorage.readTextChunk(from: source, charCount: count)
+                }.value
+                let outcome: ClipboardNavigationDiagnostics.Outcome =
+                    Task.isCancelled ? .cancelled : chunk == nil ? .unavailable : .completed
+                diagnostics.record(.previewRead, milliseconds: diagnostics.elapsed(since: readStart),
+                                   navigation: navigation, outcome: outcome)
                 guard !Task.isCancelled else { return }
                 if let chunk { text = chunk.text; hasMore = !chunk.reachedEOF }
                 else { error = "Saved text unavailable" }

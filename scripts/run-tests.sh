@@ -584,6 +584,9 @@ run slow ext-test          -parse-as-library \
                            Ollie/Platform/Compression/Zlib.swift \
                            Ollie/Features/Calculator/Model/ColorValue.swift \
                            Ollie/Features/Calculator/Model/ColorSpaces.swift
+run -O clipboard-navigation-diagnostics-test -parse-as-library \
+    Ollie/Platform/Diagnostics.swift \
+    Ollie/Features/Clipboard/Service/ClipboardNavigationDiagnostics.swift
 run diagnostics-test -parse-as-library Ollie/Platform/Diagnostics.swift Ollie/Platform/Signposts.swift Ollie/Features/Settings/AppSettingsKey.swift
 run ollie-dictation-test -parse-as-library Ollie/Platform/Diagnostics.swift Ollie/Features/Dictation/Service/{CelerisClient,OpenRouterClient,MercuryClient,DictationHTTP}.swift Tests/Dictation/*.swift Ollie/Platform/AppPaths.swift Ollie/Features/Dictation/Runtime/{Ports,RecordingRuntime,PasteRuntime,ShortcutRuntime,ShortcutStateMachine}.swift Ollie/Features/Dictation/Service/AudioCaptureController.swift Ollie/Features/Dictation/Service/AudioBufferConverter.swift Ollie/Features/Dictation/Service/AudioInputSelection.swift Ollie/Features/Dictation/Service/DeepgramLanguage.swift Ollie/Features/Dictation/Service/TranscriptionProvider.swift Ollie/Features/Dictation/Service/EnhancementProvider.swift Ollie/Features/Dictation/Service/ShortcutConfig.swift Ollie/Features/Dictation/Service/Hotkey.swift Ollie/Features/Dictation/Service/RecordingOwnership.swift Ollie/Features/Dictation/Service/ShortcutOwnershipPolicy.swift Ollie/Features/Dictation/Service/StatusModel.swift Ollie/Features/Dictation/Service/LogEntry.swift Ollie/Features/Dictation/Service/DictationSessionState.swift Ollie/Features/Dictation/Service/DictationPreferences.swift Ollie/Features/Dictation/Service/TranscriptHistoryStore.swift Ollie/Features/Dictation/Service/RawRecordingStore.swift Ollie/Features/Dictation/Service/SystemMuteController.swift Ollie/Features/Dictation/Service/TranscriptionReconnectPolicy.swift Ollie/Features/Dictation/Service/String+Trim.swift
 run ollie-switcher-test -parse-as-library Ollie/Platform/Diagnostics.swift Ollie/Features/WindowSwitcher/Service/*.swift
@@ -608,6 +611,7 @@ run ollie-clipboard-test -parse-as-library \
     Ollie/Features/Clipboard/Service/PasteController.swift \
     Ollie/Platform/NotificationToken.swift
 run clipboard-coordinator-test -parse-as-library \
+    Ollie/Features/Clipboard/Service/ClipboardNavigationDiagnostics.swift \
     Ollie/Features/Clipboard/ClipboardCoordinator.swift \
     Ollie/Features/Clipboard/Model/*.swift \
     Ollie/Features/Clipboard/Service/ClipboardSearchSession.swift \

@@ -58,6 +58,24 @@ struct Diagnostics: Sendable {
         )
     }
 
+    func latency(_ name: String, milliseconds: Double, threshold: Double,
+                 details: @autoclosure () -> String = "") {
+        guard milliseconds.isFinite, milliseconds >= 0 else { return }
+        guard milliseconds >= threshold else {
+            benchmark(name, durationMilliseconds: milliseconds, details: details())
+            return
+        }
+        let duration = Self.format(milliseconds)
+        let detail = details()
+        if publicBenchmarkDetails {
+            logger.warning(
+                "lag.\(name, privacy: .public) duration_ms=\(duration, privacy: .public) \(detail, privacy: .public)")
+        } else {
+            logger.warning(
+                "lag.\(name, privacy: .public) duration_ms=\(duration, privacy: .public) \(detail, privacy: .private)")
+        }
+    }
+
     func benchmark(
         _ name: String,
         durationMilliseconds: @autoclosure () -> Double,

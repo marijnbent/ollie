@@ -20,6 +20,7 @@ final class AppCore {
         fileURL: AppPaths.applicationSupport().appendingPathComponent("room-parking.json"))
     let roomSession = RoomSession()
     let textInjector: TextInjector
+    let clipboardNavigationDiagnostics = ClipboardNavigationDiagnostics()
     @ObservationIgnored private(set) lazy var compactMenu = CompactMenuController(core: self)
     @ObservationIgnored private(set) lazy var typingSounds = TypingSoundsCoordinator(settings: settings, ticker: healthTicker)
     @ObservationIgnored private(set) lazy var notifications = NotificationsCoordinator(settings: settings)

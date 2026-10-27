@@ -143,6 +143,7 @@ struct ClipboardCoordinatorTests {
 }
 
 @MainActor final class AppCore {
+    let clipboardNavigationDiagnostics = ClipboardNavigationDiagnostics()
     let textInjector = TestTextInjector()
     let settings = TestSettings()
     let appIndex = TestAppIndex()

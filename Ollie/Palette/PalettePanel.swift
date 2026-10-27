@@ -22,6 +22,7 @@ final class PalettePanel: NSPanel {
     }
 
     private var redispatchingEmacsArrow = false
+    weak var clipboardNavigationDiagnostics: ClipboardNavigationDiagnostics?
 
     var fieldEditorContext: NSTextInputContext? { fieldEditor?.inputContext }
 
@@ -164,6 +165,9 @@ final class PalettePanel: NSPanel {
         // Keys and scrolling both slide rows under the pointer without it choosing any of them.
         case .keyDown, .scrollWheel:
             paletteState?.disarmHoverHighlight(pointerAt: NSEvent.mouseLocation)
+            if event.type == .scrollWheel { clipboardNavigationDiagnostics?.stop() }
+        case .leftMouseDown, .rightMouseDown:
+            clipboardNavigationDiagnostics?.stop()
         case .flagsChanged:
             paletteState?.noteCommandHeld(event.modifierFlags.contains(.command))
         default: break
@@ -176,6 +180,11 @@ final class PalettePanel: NSPanel {
             redispatchingEmacsArrow = false
             return
         }
+        let isClipboardArrow = event.type == .keyDown && paletteState?.mode == .clipboard
+            && paletteState?.menuOpen != true
+            && [kVK_DownArrow, kVK_UpArrow].contains(Int(event.keyCode))
+            && event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift])
+        if event.type == .keyDown, !isClipboardArrow { clipboardNavigationDiagnostics?.stop() }
         // A palette menu owns the keyboard. See docs/features/palette.md#menu-open-input-freeze.
         if event.type == .keyDown,
             paletteState?.menuOpen == true,
@@ -211,6 +220,9 @@ final class PalettePanel: NSPanel {
         {
             return
         }
+        let trace = isClipboardArrow ? clipboardNavigationDiagnostics : nil
+        let navigation = trace?.beginInput(timestamp: event.timestamp, repeating: event.isARepeat)
+        defer { if let navigation { trace?.finishDispatch(navigation) } }
         super.sendEvent(event)
     }
     init<Content: View>(rootView: Content) {

@@ -1222,6 +1222,7 @@ struct RootPaletteView: View {
 
     /// ↑/↓: the screen's own move where it has one, else a linear step through the rows.
     private func moveVertically(_ delta: Int) -> KeyPress.Result {
+        defer { if vm.mode == .clipboard { core.clipboard.noteKeyboardSelection() } }
         let screen = screen
         // A control editing with ↑/↓ keeps them; only ⇥ leaves it.
         guard !screen.ownsVerticalKeys(at: selection(in: screen)) else { return .ignored }

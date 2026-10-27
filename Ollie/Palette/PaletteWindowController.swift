@@ -368,6 +368,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         let panel = PalettePanel(rootView: root)
         panel.delegate = self
         panel.paletteState = core.palette
+        panel.clipboardNavigationDiagnostics = core.clipboardNavigationDiagnostics
         // The switch is scoped to the palette's own editing context, never applied globally.
         panel.onFieldEditorFocused = { [weak self] context in
             self?.core.inputSourceSwitcher.applySession(to: context)

@@ -731,3 +731,40 @@ logs, extension console output, notification debug events and performance signpo
 errors remain available when off. Dictation's Logs tab remains a viewer; it has no separate switch.
 `diagnostics-test` verifies the shared live gate, lazy message evaluation, essential errors and that
 signpost gating never skips application work. The Dictation harness covers log filtering.
+
+### Clipboard keyboard lag
+
+`ClipboardNavigationDiagnostics`, owned by `AppCore`, correlates arrow-key delivery, synchronous
+dispatch, selection changes, the first scroll-offset update, preview scheduling, text reads and image
+preparation. A one-shot main-actor checkpoint also measures scheduling lateness after 16 ms; it is
+cancelled on the next input or palette close. There is no idle polling or permanent input monitor.
+
+Slow events are retained as `lag.clipboard.*` warnings under category `clipboard-performance`, even
+with Diagnostics off. Thresholds are 32 ms for synchronous key dispatch, 50 ms for preview reads or
+image preparation, and 100 ms for the other phases. With Diagnostics on, healthy phases also emit
+`benchmark.clipboard.*` debug events. The intentional 300 ms text-preview wait is separate, never
+warns by itself, and is subtracted from preview-ready elapsed time, including cancelled previews.
+Only the planned portion is excluded: a late continuation after that wait remains in preview-ready
+time, so main-actor stalls during the wait cannot disappear from the slow-event reports.
+
+Reports contain only a navigation counter, row index, text/image/snippet kind, file-backed flag,
+key-repeat flag, outcome and elapsed milliseconds. Clipboard text, query, item IDs, paths and source
+application names are never included. Stages overlap; their durations must not be added together.
+Scroll timing ends at the first offset change, not a presented frame or verified final row position.
+
+Read retained slow events after an incident:
+
+```sh
+/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "nl.bentjes.fredie" AND category == "clipboard-performance"'
+```
+
+For the detailed live sequence, enable General → Diagnostics and run:
+
+```sh
+/usr/bin/log stream --level debug --style compact --predicate 'subsystem == "nl.bentjes.fredie" AND category == "clipboard-performance"'
+```
+
+`clipboard-navigation-diagnostics-test` uses an injected clock and event sink to check correlation,
+one-shot scroll reporting, cancellation, checkpoint lateness and exclusion of private item identities.
+It also reports the cost of a healthy timing-log gate. `diagnostics-test` covers the slow-event
+threshold, invalid elapsed values and lazy details while Diagnostics is off.
