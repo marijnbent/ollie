@@ -17,8 +17,8 @@ enum ScreenNoteImage {
         context.setLineCap(.round)
         context.setLineJoin(.round)
         for stroke in strokes {
-            context.setStrokeColor(stroke.color.cgColor)
-            context.setLineWidth(CGFloat(stroke.width.rawValue))
+            context.setStrokeColor(ScreenInk.color)
+            context.setLineWidth(ScreenInk.width)
             context.addPath(stroke.path)
             context.strokePath()
         }

@@ -85,8 +85,7 @@ struct FeatureAvailabilityTests {
 
         settings.screenNotesEnabled = true
         precondition(settings.allows(.feature(.screenNotes)))
-        precondition(HotKeyAction.command(.drawOnScreen).capability == .feature(.screenNotes))
-        precondition(CommandID.drawOnScreen.owner == .screenNotes)
+        precondition(CommandID.explainScreen.owner == .screenNotes)
         precondition(!settings.allows(.feature(.launcher)))
         precondition(!settings.allows(.screenExplanation))
         settings.dictationEnabled = true

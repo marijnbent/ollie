@@ -507,7 +507,7 @@ final class AppCore {
         clipboard.stop()
         typingSounds.stop()
         cameraCoordinator.stop()
-        screenNotes.stop(restoreFocus: false)
+        screenNotes.stop()
         customCommandCoordinator.stop()
         mediaImport.stop()
         notifications.stop()
@@ -612,7 +612,6 @@ final class AppCore {
         if changed(.feature(.spaces)) { spaces.apply() }
         if changed(.feature(.screenNotes)) {
             screenNotes.apply()
-            appIndex.setCommandsVisible([.drawOnScreen], next.allows(.feature(.screenNotes)))
         }
         if changed(.screenExplanation) {
             screenNotes.apply()

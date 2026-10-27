@@ -586,18 +586,6 @@ final class AppSettings {
     var screenNotesEnabled: Bool {
         didSet { defaults.set(screenNotesEnabled, forKey: Key.screenNotesEnabled.rawValue) }
     }
-    var screenNotesTool: ScreenInk.Tool {
-        didSet { defaults.set(screenNotesTool.rawValue, forKey: Key.screenNotesTool.rawValue) }
-    }
-    var screenNotesColor: ScreenInk.Color {
-        didSet { defaults.set(screenNotesColor.rawValue, forKey: Key.screenNotesColor.rawValue) }
-    }
-    var screenNotesWidth: ScreenInk.Width {
-        didSet { defaults.set(screenNotesWidth.rawValue, forKey: Key.screenNotesWidth.rawValue) }
-    }
-    var screenNotesLifetime: ScreenInk.Lifetime {
-        didSet { defaults.set(screenNotesLifetime.rawValue, forKey: Key.screenNotesLifetime.rawValue) }
-    }
 
     var typingSoundsEnabled: Bool {
         didSet { defaults.set(typingSoundsEnabled, forKey: Key.typingSoundsEnabled.rawValue) }
@@ -650,13 +638,6 @@ final class AppSettings {
         notificationsEnabled = defaults.bool(forKey: Key.notificationsEnabled.rawValue)
         networkEnabled = defaults.bool(forKey: Key.networkEnabled.rawValue)
         screenNotesEnabled = defaults.bool(forKey: Key.screenNotesEnabled.rawValue)
-        screenNotesTool = defaults.string(forKey: Key.screenNotesTool.rawValue)
-            .flatMap(ScreenInk.Tool.init(rawValue:)) ?? .pen
-        screenNotesColor = defaults.string(forKey: Key.screenNotesColor.rawValue)
-            .flatMap(ScreenInk.Color.init(rawValue:)) ?? .red
-        screenNotesWidth = ScreenInk.Width(rawValue: defaults.integer(forKey: Key.screenNotesWidth.rawValue)) ?? .medium
-        screenNotesLifetime = (defaults.object(forKey: Key.screenNotesLifetime.rawValue) as? Int)
-            .flatMap(ScreenInk.Lifetime.init(rawValue:)) ?? .fiveSeconds
         typingSoundsEnabled = defaults.object(forKey: Key.typingSoundsEnabled.rawValue) == nil ? false
             : defaults.bool(forKey: Key.typingSoundsEnabled.rawValue)
         typingSoundProfile = defaults.object(forKey: Key.typingSoundProfile.rawValue) == nil ? "creamyLinear"

@@ -65,12 +65,8 @@ enum SettingsFileSchema {
         case .diagnosticsEnabled: return bind(settings, \.diagnosticsEnabled)
         case .clipboardHistoryDays: return bind(settings, \.clipboardHistoryDays) { [1, 7, 30, 180].contains($0) ? $0 : nil }
         case .launcherEnabled: return bind(settings, \.launcherEnabled)
-        case .screenNotesTool: return bind(settings, \.screenNotesTool)
-        case .screenNotesColor: return bind(settings, \.screenNotesColor)
-        case .screenNotesWidth: return bind(settings, \.screenNotesWidth)
-        case .screenNotesLifetime: return bind(settings, \.screenNotesLifetime)
         case .screenNotesShortcut:
-            return shortcuts.binding(for: key, action: .command(.explainScreen), name: "Explain Screen")
+            return shortcuts.binding(for: key, action: .command(.explainScreen), name: "Screen Note")
         case .typingSoundProfile: return bind(settings, \.typingSoundProfile) { SoundProfile(rawValue: $0) == nil ? nil : $0 }
         case .typingSoundVolume: return bind(settings, \.typingSoundVolume) { (0...100).contains($0) ? $0 : nil }
         case .typingSoundDownVolume: return bind(settings, \.typingSoundDownVolume) { (0...100).contains($0) ? $0 : nil }
@@ -180,10 +176,6 @@ enum SettingsFileSchema {
     }
 }
 
-extension ScreenInk.Tool: SettingsFileRawValue {}
-extension ScreenInk.Color: SettingsFileRawValue {}
-extension ScreenInk.Width: SettingsFileRawValue {}
-extension ScreenInk.Lifetime: SettingsFileRawValue {}
 
 extension PopToRootTimeout: SettingsFileRawValue {}
 extension EscapeKeyBehavior: SettingsFileRawValue {}

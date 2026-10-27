@@ -195,12 +195,8 @@ enum SettingsSearchCatalog {
     ]
 
     private static let screenNotes: [SettingsSearchEntry] = [
-        .init(pane: .screenNotes, keywords: ["scrawl", "annotate", "pen", "ink", "temporary", "drawing", "explain screen", "screenshot", "dictation", "narrate"]),
-        .init(group: .screenNotesCommands, "Screen note commands", keywords: ["shortcut", "hotkey"]),
-        .init(.screenNotesInk, "Tool", keywords: ["pen", "arrow"]),
-        .init(.screenNotesInk, "Color", keywords: ["colour", "red", "yellow", "blue", "green"]),
-        .init(.screenNotesInk, "Width", keywords: ["thickness", "size"]),
-        .init(.screenNotesInk, "Drawing-only auto-clear", keywords: ["fade", "temporary", "seconds", "auto clear"]),
+        .init(pane: .screenNotes, keywords: ["scrawl", "annotate", "marker", "screen note", "option", "screenshot",
+                                             "dictation", "narrate", "shortcut", "hotkey"]),
     ]
 
     private static let emoji: [SettingsSearchEntry] = [

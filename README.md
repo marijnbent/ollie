@@ -15,8 +15,8 @@ topics import from the Notifications pane. Existing Ollie preferences stay in pl
 Requires macOS 26+, Xcode 26, and XcodeGen (`brew install xcodegen`).
 
 [Screen Notes](docs/features/screen-notes.md) combines existing dictation with annotated screenshots.
-Enable it in Settings → Features, then use **Explain Screen**: talk, draw or take more snapshots, and
-finish to copy the screenshots and note for pasting into AI. **Draw on Screen** also works on its own.
+Enable it in Settings → Features, then use **Screen Note**: one shortcut starts narration, ⌥-drag
+adds markers, and the shortcut again copies screenshots and the note for pasting into your agent.
 
 ## Build and install
 

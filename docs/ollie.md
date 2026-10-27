@@ -28,7 +28,7 @@ Tab and Return consume the selection key and use the same replacement path. See
 commands, shortcut registration and action dispatch use it. Launcher owns its saved child options;
 Quick Actions and MCP require AI. Turning a parent off preserves those options without running them.
 Clipboard and Snippets share their panel but remain independent; Spaces shortcuts do not require
-Launcher. Screen Notes has an independent switch; Explain Screen additionally requires Dictation.
+Launcher. Screen Notes has an independent switch and requires Dictation for narrated screenshots.
 It hands speech back without auto-paste and copies annotated PNGs plus a note for pasting into AI.
 AppCore compares effective capabilities and applies only the changed coordinators.
 

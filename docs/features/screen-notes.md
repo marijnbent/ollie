@@ -2,93 +2,78 @@
 
 ## Invariants
 
-- `AppCore` owns `ScreenNoteCoordinator`. Screen Notes starts disabled. Explain Screen also requires
-  Dictation to be enabled and idle; drawing alone works independently of Dictation and Launcher.
-- A screen note is a finite session of screenshots and speech, never a video stream. Screenshots stay
-  local until the user pastes them. Speech uses the existing dictation microphone, provider and language.
+- `AppCore` owns `ScreenNoteCoordinator`. Screen Notes starts disabled and requires enabled, configured,
+  idle Dictation. Speech uses the existing microphone, provider and language without per-app enhancement.
+- A screen note is a finite session of screenshots and speech. Nothing is recorded between sessions,
+  and screenshots stay local until the user pastes them. There is no video or continuous capture.
 - Dictation hand-off returns text without clipboard writes or synthetic paste. The transcript and raw
-  recording follow the existing Dictation history policy. Per-app enhancement prompts are skipped.
+  recording follow the existing Dictation history policy.
+- Overlays never become key. Normal typing, app switching and Space switching remain with the active
+  app. Only holding Option gives the overlays mouse input; they cover all connected displays.
 - Cancelling, disabling either required feature, display changes, sleep and session deactivation cancel
-  pending work and leave the clipboard unchanged. Every asynchronous result is bound to its session ID.
-- Off means no capture, input listeners, panels, expiry task or observers. Published clipboard files
-  remain available for a later paste; the next successful note replaces old output files.
-- Capture is bounded to ten screenshots and 32 MB of PNG data. Screenshot edges are capped at 2560
-  pixels. Ink is bounded to 128 finished strokes and 4096 points per pen stroke; arrows retain endpoints.
+  pending work and leave the clipboard unchanged. Asynchronous work is bound to its session ID.
+- Capture is bounded to ten screenshots and 32 MB of PNG data, with a 2560-pixel edge limit.
+  Automatic context shots reserve three slots; markers reserve the final slot. Pen strokes are
+  bounded to 4096 points. Queued captures count toward admission limits.
+- Off means no capture, input monitors, panels, tasks or observers. Published clipboard files remain
+  available for a later paste; the next successful note replaces old output files.
 
-## Explain Screen
+## One shortcut
 
-Enable **Screen Notes** and configure **Dictation** in Settings → Features. Start **Explain Screen**
-from the launcher, the menu bar's options menu or its shortcut in Settings → Screen Notes.
+Enable **Screen Notes** and configure **Dictation** in Settings → Features. Bind **Screen Note** in
+Settings → Screen Notes. The same command is available in the launcher and menu bar.
 
-The command chooses the display under the pointer. The Explain Screen menu in its settings selects
-one display explicitly. Screen Recording permission is required and requested only by starting the
-command. Existing microphone access and speech credentials are reused.
+Press the shortcut to start talking. Ollie takes a clean screenshot of the display under the pointer
+and shows a small recording pill with a screenshot count, Cancel and Finish.
 
-The session takes an initial clean screenshot, starts narration and shows a compact toolbar on that
-same display. Drawing is optional: the cursor button releases mouse input to the app underneath,
-so scrolling, clicking and app switching can continue while talking. The toolbar stays clickable.
+Hold **⌥ and drag** to draw a red marker on any display. Each completed drag saves one annotated
+screenshot automatically and fades the marker. A circle, underline or dot is enough; there are no
+tools, ink settings, drawing mode or Snap button. Screenshots use a background requested at the start
+of the drag, with the stroke composited after mouse-up. Pending backgrounds and output stay bound to
+that stroke, even when a later capture completes first.
 
-**Snap** captures another screenshot with the current ink burned in, then removes only the captured
-strokes. New strokes drawn during capture remain. Ink stays until captured or cleared during a narrated
-session, so a temporary fade cannot silently remove annotations from the final screenshot.
+Use apps normally between marks. App and Space changes schedule a clean context screenshot after
+500 ms, merging rapid switches. Context captures choose the display containing the largest part of
+the app's frontmost window, falling back to the pointer display for apps without visible windows.
 
-**Done** (or Explain Screen's shortcut again) takes a final screenshot if capacity remains and waits
-for speech finalization. It copies separate PNG files and the note to the clipboard and closes the
-controls. It never pastes or submits a prompt. A partial transcription or failed screenshot is reported;
-if speech fails, the screenshots are still copied with a notice.
+Press the shortcut again, or click Finish, to stop narration. Ollie captures the final context,
+omits an unchanged background, waits for transcription and copies one screen note to the clipboard.
+It never pastes or submits a prompt. Cancel leaves the clipboard unchanged. Normal Dictation hotkeys
+and its Esc-to-cancel interception are suspended for the session so Option bindings and app-level
+Escape remain usable. A partial transcription
+or failed capture is reported; screenshots are still copied if speech fails.
 
-| Control while drawing | Action |
-| --- | --- |
-| Drag / Shift-drag | Selected pen or arrow / temporary arrow |
-| P / A | Select pen / arrow |
-| 1–4 | Red / yellow / blue / green |
-| [ / ] | Decrease / increase width |
-| Space | Take screenshot |
-| D | Toggle drawing and interaction with the underlying app |
-| ⌘Z / Delete | Undo / clear ink |
-| Return | Done |
-| Esc, right-click or close button | Cancel without changing the clipboard |
+Screen Recording is requested only when starting a session. Screen markers also require Ollie's
+existing Accessibility access so session-only global/local modifier monitors can track Option presses
+and releases reliably, including without mouse movement. There is no new event tap or permission
+prompt for Accessibility. Microphone access and speech credentials come from Dictation.
 
 ## Pasting
 
-Done writes one plain-text item containing the transcript and screenshot timestamps, followed by one
-item per PNG with both PNG bytes and a file URL, and a `Note.md` file containing the same text. The note
-file lets a composer that prioritizes file attachments still receive the explanation.
-
-Paste handling belongs to the destination app. **Copy Last Screen Note** copies the complete result
-again; **Copy Last Note Text** copies only text for a separate paste if the destination discarded it.
-Both commands are bindable and appear in the menu-bar options and Screen Notes settings. They retain
-only the latest completed note in this app session. No destination-specific automation is used.
+Finish writes one plain-text item, separate PNG items with PNG bytes and file URLs, and a `Note.md`
+file. The note contains the transcript and a screenshot timeline with timestamps, app names, display
+names and capture kinds. `Note.md` repeats the explanation so file-preferring composers receive it.
+There is one clipboard write and one user paste; destination apps control which representations they
+accept. There is no destination-specific automation or additional copy command.
 
 PNG and note files live in the bundle-specific `Caches/ScreenNotes/<session UUID>/` directory with
-owner-only permissions. Cancelled output is removed after pending writes finish. Successfully copied
-files survive closing Ollie because pasteboard file URLs may be read later. The next successful note
-removes older session directories; a cancelled new session preserves the previously copied result.
-
-## Drawing alone
-
-**Draw on Screen** opens the same native ink surfaces without microphone or screenshots, across all
-displays. It needs no permissions. Escape, right-click, the close button or the command again closes
-and clears the drawing. App or Space switching also closes this standalone mode.
-
-Settings and toolbar options provide three widths and four colors. Drawing-only auto-clear is 2, 5 or
-10 seconds, or Until closed. Defaults are red, medium pen strokes and five-second clearing. Narrated
-sessions keep ink until Snap or Done instead. Tool, color, width, auto-clear and Explain Screen's
-shortcut mirror through `settings.json` under `screenNotes`; the enable switch is never imported.
+owner-only permissions. Cancelled output is removed after pending writes finish. Published files
+survive closing Ollie because file URLs may be read later. The next successful note removes older
+session directories; cancelling a new session preserves the previously copied files.
 
 ## Implementation and verification
 
-`ScreenInk` and `ScreenNote` are pure models. `ScreenInkView` appends live paths incrementally and
-uses one `CAShapeLayer` per stroke. `ScreenNoteCapture` uses macOS 26's `SCScreenshotManager`, excluding
-only the feature's control windows, so Ollie's ordinary windows can also be explained. Image
-composition and PNG encoding run off-main through `ScreenNoteImage`.
+`ScreenInk` and `ScreenNote` are pure models. `ScreenInkView` incrementally appends a native shape
+layer path. `ScreenNoteCapture` uses macOS 26's `SCScreenshotManager`, excluding only the feature's
+control windows so ordinary Ollie windows can also be explained. PNG composition, encoding and
+fingerprinting run off-main. Output work is serialized and screenshots are bounded before admission.
 
 This independent native implementation is inspired by [Scrawl](https://github.com/kitlangton/scrawl).
-Opus consultation recommended reusing dictation through a hand-off delivery mode, explicit drawing,
-separate screenshots and no continuous recording pipeline. It adds no third-party dependency.
+Opus consultation recommended one shortcut, held Option for markers, automatic context screenshots
+and the existing dictation hand-off. No third-party dependency is added.
 
-`ollie-dictation-test` covers hand-off delivery and abandonment while retaining normal dictation checks.
-`screen-ink-test` covers ink expiry, undo, bounded storage, shot limits and point-to-pixel composition.
-`screen-note-clipboard-test` verifies multi-item text, PNG and note-file output on a private pasteboard.
-Live capture, microphone, focus return and pasting into AI apps require desktop-test approval and are
-not established by those harnesses.
+`screen-ink-test` covers marker geometry, storage bounds, capture-slot reservation, display selection
+and point-to-pixel composition. `screen-note-clipboard-test` checks the complete multi-item payload on
+a private pasteboard. Dictation hand-off remains covered by `ollie-dictation-test`.
+Live capture, Option-drag without focus changes, app/Space switching and pasting into AI apps require
+desktop-test approval; the noninteractive harnesses do not establish those behaviors.

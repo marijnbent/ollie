@@ -36,9 +36,8 @@ struct SettingsFileTest {
         check(
             "emoji preferences and command controls are mirrored",
             Set(SettingsFileKey.available).isSuperset(of: [.emojiSkinTone, .emojiGridColumns, .emojiCommands]))
-        check("screen drawing options and shortcut are mirrored",
-            Set(SettingsFileKey.available).isSuperset(of: [.screenNotesTool, .screenNotesColor,
-                .screenNotesWidth, .screenNotesLifetime, .screenNotesShortcut]))
+        check("screen note shortcut is mirrored",
+            Set(SettingsFileKey.available).contains(.screenNotesShortcut))
 
         var closed: Set<String> = []
         var current: String?

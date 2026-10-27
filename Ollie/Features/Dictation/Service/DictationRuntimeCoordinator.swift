@@ -116,7 +116,7 @@ final class DictationRuntimeCoordinator {
     }
 
     var canCancelFromEsc: Bool {
-        recordingRuntime.phase != .idle || pasteTask != nil
+        handOff == nil && (recordingRuntime.phase != .idle || pasteTask != nil)
     }
 
     func recoverMonitor() { shortcutRuntime.recoverMonitor() }
@@ -327,8 +327,8 @@ final class DictationRuntimeCoordinator {
 
     private func handleShortcutActions(_ actions: [ShortcutAction]) {
         guard isEnabled() else { stop(); return }
+        guard handOff == nil else { return }
         for action in actions {
-            if handOff != nil, recordingRuntime.phase == .idle { continue }
             if shouldRequestMicrophonePermission(for: action) {
                 requestMicrophonePermissionForRecording()
                 continue
@@ -339,6 +339,7 @@ final class DictationRuntimeCoordinator {
     }
 
     private func cycleLanguage() {
+        guard handOff == nil else { return }
         let provider = settingsStore.transcriptionProvider
         let currentLanguage = provider.normalizedLanguage(settingsStore.deepgramLanguage)
         let language = DeepgramLanguage.nextStarredLanguage(

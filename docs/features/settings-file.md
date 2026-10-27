@@ -2,8 +2,8 @@
 
 Ollie mirrors shared and feature preferences through `SettingsFileSchema`.
 
-`screenNotes` mirrors tool, color, width, auto-clear time and the Explain Screen shortcut.
-Enabling drawing stays an in-app choice; see [screen notes](screen-notes.md).
+`screenNotes` mirrors the Screen Note shortcut.
+Enabling screen notes stays an in-app choice; see [screen notes](screen-notes.md).
 
 `general.diagnostics` controls optional app-wide diagnostic logging and performance traces. It defaults to false.
 

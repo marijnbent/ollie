@@ -13,17 +13,7 @@ struct CompactMenuView: View {
                 Spacer()
                 Menu {
                     if core.settings.allows(.screenExplanation) {
-                        Button("Explain Screen", systemImage: "mic.badge.plus") { perform { core.screenNotes.explain() } }
-                    }
-                    if core.settings.allows(.feature(.screenNotes)) {
-                        if core.screenNotes.lastNote != nil {
-                            Button("Copy Last Screen Note") { perform { core.screenNotes.copyLastNote() } }
-                            Button("Copy Last Note Text") { perform { core.screenNotes.copyLastNote(textOnly: true) } }
-                        }
-                        Button("Draw on Screen", systemImage: "scribble.variable") {
-                            perform { core.screenNotes.toggle() }
-                        }
-                        Divider()
+                        Button("Screen Note", systemImage: "mic.badge.plus") { perform { core.screenNotes.toggle() } }
                     }
                     Button("Check for Updates…") { perform { core.updateCoordinator.checkForUpdates() } }
                     Button("About \(Bundle.main.appDisplayName)") { perform { core.settingsCoordinator.showAbout() } }

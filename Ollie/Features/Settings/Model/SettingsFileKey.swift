@@ -120,10 +120,6 @@ enum SettingsFileKey: String, CaseIterable, Sendable {
     case calendarCommands = "calendar.commands"
     case extensionsShowInLauncher = "extensions.showInLauncher"
 
-    case screenNotesTool = "screenNotes.tool"
-    case screenNotesColor = "screenNotes.color"
-    case screenNotesWidth = "screenNotes.width"
-    case screenNotesLifetime = "screenNotes.clearAfterSeconds"
     case screenNotesShortcut = "screenNotes.shortcut"
 
     case typingSoundProfile = "sounds.typingSoundProfile"

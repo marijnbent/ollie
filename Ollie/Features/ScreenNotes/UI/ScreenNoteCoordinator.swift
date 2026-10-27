@@ -4,220 +4,227 @@ import SwiftUI
 @MainActor
 @Observable
 final class ScreenNoteCoordinator {
-    enum Phase { case idle, drawing, starting, recording, finishing, copying }
+    enum Phase { case idle, recording, finishing, copying }
 
     private unowned let core: AppCore
     private var settings: AppSettings { core.settings }
     private(set) var phase = Phase.idle
-    private(set) var drawingEnabled = false
-    private(set) var canUndo = false
     private(set) var shotCount = 0
-    private(set) var captureBusy = false
-    private(set) var displayName = ""
-    private(set) var lastNote: ScreenNote?
+    @ObservationIgnored private var marking = false
     @ObservationIgnored private var ink = ScreenInk()
     @ObservationIgnored private var note: ScreenNote?
-    @ObservationIgnored private var targetScreen: NSScreen?
     @ObservationIgnored private var panels: [ScreenNotePanel] = []
     @ObservationIgnored private var toolbar: ScreenNotePanel?
     @ObservationIgnored private var canvases: [UInt32: ScreenInkView] = [:]
     @ObservationIgnored private var observations: [NotificationToken] = []
-    @ObservationIgnored private var expiryTask: Task<Void, Never>?
+    @ObservationIgnored private let markerMonitor = ScreenMarkerMonitor()
     @ObservationIgnored private var captureTask: Task<Void, Never>?
+    @ObservationIgnored private var frames: [UUID: Task<ScreenNoteCapture.Frame, Error>] = [:]
+    @ObservationIgnored private var activeFrame: UUID?
+    @ObservationIgnored private var pendingCaptures = 0
+    @ObservationIgnored private var contextTask: Task<Void, Never>?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
     @ObservationIgnored private var cleanupTask: Task<Void, Never>?
-    @ObservationIgnored private weak var previousWindow: NSWindow?
-    @ObservationIgnored private var previousApp: NSRunningApplication?
-    @ObservationIgnored private var sessionID: UUID?
+    @ObservationIgnored private var publishedDirectory: URL?
+    @ObservationIgnored private var fingerprints: [UInt32: Data] = [:]
     @ObservationIgnored private var startedAt: TimeInterval = 0
     @ObservationIgnored private var transcriptResult: TranscriptHandOff.Result?
-    @ObservationIgnored private var finishRequested = false
     @ObservationIgnored private var warning: String?
+    @ObservationIgnored private var limitShown = false
 
     var isActive: Bool { phase != .idle }
-    var isNarrating: Bool { isActive && phase != .drawing }
-    var isDrawing: Bool { isActive && drawingEnabled }
-    var canSnap: Bool { phase == .recording && !captureBusy && shotCount < ScreenNote.maximumShots }
 
     init(core: AppCore) { self.core = core }
 
     func apply() {
-        core.appIndex.setCommandsVisible([.copyLastScreenNote, .copyLastScreenNoteText],
-                                         settings.screenNotesEnabled && lastNote != nil)
-        if !settings.screenNotesEnabled {
-            stop()
-            exportTask?.cancel()
-        } else if isNarrating && !settings.dictationEnabled {
-            stop()
-        }
+        if !settings.screenNotesEnabled || !settings.dictationEnabled { stop() }
     }
 
     func toggle() {
-        if isNarrating { toggleDrawing(); return }
-        if isActive { stop(); return }
-        guard settings.screenNotesEnabled, exportTask == nil, let screen = NSScreen.underCursor else { return }
-        beginSession(on: screen, phase: .drawing)
-        showPanels(on: NSScreen.screens, toolbarScreen: screen)
-    }
-
-    func explain(on screen: NSScreen? = nil) {
         if phase == .recording { finishNote(); return }
-        guard phase == .idle || phase == .drawing else { return }
-        guard exportTask == nil else { return }
-        guard settings.screenNotesEnabled else { return }
-        guard settings.dictationEnabled else {
-            core.showMessage("Enable Dictation first.", tone: .neutral)
-            return
-        }
+        guard phase == .idle, settings.screenNotesEnabled, settings.dictationEnabled,
+              let screen = NSScreen.underCursor, let displayID = Self.displayID(screen) else { return }
         if let issue = core.dictation.handOffUnavailableReason() {
             core.showMessage(issue, tone: .neutral)
             return
         }
-        guard CGPreflightScreenCaptureAccess() else {
-            if isActive { stop(restoreFocus: false) }
-            _ = CGRequestScreenCaptureAccess()
-            core.showMessage("Allow Screen Recording in System Settings, then try Explain Screen again.", tone: .neutral)
+        guard Permissions.isAccessibilityTrusted() else {
+            core.showMessage("Allow Accessibility for Ollie in System Settings to use screen markers.", tone: .neutral)
             return
         }
-        guard let screen = screen ?? NSScreen.underCursor else { return }
-        if isActive { stop(restoreFocus: false) }
-        beginSession(on: screen, phase: .starting)
-        guard let id = sessionID else { return }
-        let directory = AppPaths.caches().appending(path: "ScreenNotes/\(id.uuidString)", directoryHint: .isDirectory)
-        note = ScreenNote(id: id, directory: directory, displayName: screen.localizedName)
-        snap()
-    }
-
-    private func beginSession(on screen: NSScreen, phase: Phase) {
-        previousWindow = NSApp.keyWindow
-        previousApp = NSWorkspace.shared.frontmostApplication
-        self.phase = phase
-        sessionID = UUID()
-        targetScreen = screen
-        displayName = screen.localizedName
-        startedAt = CACurrentMediaTime()
-        transcriptResult = nil
-        warning = nil
-        finishRequested = false
-        shotCount = 0
-        observe(NSApplication.didChangeScreenParametersNotification, center: .default)
-        observe(NSWorkspace.willSleepNotification, center: NSWorkspace.shared.notificationCenter)
-        observe(NSWorkspace.sessionDidResignActiveNotification, center: NSWorkspace.shared.notificationCenter)
-        if phase == .drawing {
-            observe(NSWorkspace.activeSpaceDidChangeNotification, center: NSWorkspace.shared.notificationCenter)
-            observe(NSWorkspace.didActivateApplicationNotification, center: NSWorkspace.shared.notificationCenter)
+        guard CGPreflightScreenCaptureAccess() else {
+            _ = CGRequestScreenCaptureAccess()
+            core.showMessage("Allow Screen Recording in System Settings, then try Screen Note again.", tone: .neutral)
+            return
         }
-    }
-
-    private func beginNarration() {
-        guard let id = sessionID, let targetScreen else { return }
+        let id = UUID()
+        let directory = AppPaths.caches().appending(path: "ScreenNotes/\(id.uuidString)", directoryHint: .isDirectory)
+        note = ScreenNote(id: id, directory: directory)
+        startedAt = CACurrentMediaTime()
+        shotCount = 0
+        warning = nil
+        limitShown = false
+        transcriptResult = nil
+        fingerprints.removeAll()
+        phase = .recording
         let start = core.dictation.beginHandOff(TranscriptHandOff(id: id, finish: { [weak self] result in
-            guard let self, self.sessionID == id else { return }
-            if case .cancelled = result { self.stop(restoreFocus: false); return }
+            guard let self, self.note?.id == id else { return }
+            if case .cancelled = result { self.stop(); return }
             self.transcriptResult = result
             if self.phase == .recording { self.finishNote() }
             self.publishIfReady()
         }))
         switch start {
         case .started:
-            phase = .recording
-            showPanels(on: [targetScreen], toolbarScreen: targetScreen)
+            guard note?.id == id else { return }
+            showPanels(toolbarScreen: screen)
+            markerMonitor.start { [weak self] option in self?.setMarking(option) }
+            observe(NSApplication.didChangeScreenParametersNotification, center: .default, context: false)
+            observe(NSWorkspace.willSleepNotification, center: NSWorkspace.shared.notificationCenter, context: false)
+            observe(NSWorkspace.sessionDidResignActiveNotification, center: NSWorkspace.shared.notificationCenter, context: false)
+            observe(NSWorkspace.didActivateApplicationNotification, center: NSWorkspace.shared.notificationCenter, context: true)
+            observe(NSWorkspace.activeSpaceDidChangeNotification, center: NSWorkspace.shared.notificationCenter, context: true)
+            enqueue(.start, displayID: displayID)
         case .unavailable(let message):
             stop()
             core.showMessage(message, tone: .neutral)
         }
     }
 
-    func toggleDrawing() {
-        guard phase == .recording || phase == .drawing else { return }
-        setDrawing(!drawingEnabled)
-    }
-
-    private func setDrawing(_ enabled: Bool) {
-        if enabled, !ownsKeyWindow {
-            previousWindow = NSApp.keyWindow
-            previousApp = NSWorkspace.shared.frontmostApplication
-        }
-        drawingEnabled = enabled
+    private func setMarking(_ enabled: Bool) {
+        guard phase == .recording, ink.active == nil else { return }
+        let available = note?.canCapture(.marked, pending: pendingCaptures) == true
+        if enabled && !available { showLimit() }
+        let enabled = enabled && available
+        guard enabled != marking else { return }
+        marking = enabled
         for panel in panels { panel.ignoresMouseEvents = !enabled }
-        if enabled, let panel = panels.first(where: { $0.screen == targetScreen }) {
-            panel.makeKey()
-            panel.makeFirstResponder(panel.contentView)
-        } else if !enabled, ownsKeyWindow {
-            restoreFocus()
-        }
+        for canvas in canvases.values { canvas.setMarking(enabled) }
     }
 
-    func snap() {
-        guard settings.screenNotesEnabled, settings.dictationEnabled,
-              phase == .starting || phase == .recording || phase == .finishing,
-              !captureBusy, let id = sessionID, let targetScreen,
-              let displayID = Self.displayID(targetScreen), let note else { return }
-        guard note.canAddShot else {
-            if phase == .finishing { publishIfReady() }
+    func begin(at point: CGPoint, displayID: UInt32) {
+        guard phase == .recording, note?.canCapture(.marked, pending: pendingCaptures) == true else { return }
+        ink.begin(at: point, displayID: displayID)
+        activeFrame = startFrame(displayID: displayID)
+        canvases[displayID]?.begin(point)
+    }
+
+    func append(_ point: CGPoint) {
+        let count = ink.active?.points.count
+        ink.append(point)
+        if let stroke = ink.active, stroke.points.count != count { canvases[stroke.displayID]?.append(point) }
+    }
+
+    func finishMark() {
+        guard let stroke = ink.finish(), let frame = activeFrame else { return }
+        activeFrame = nil
+        canvases[stroke.displayID]?.fade()
+        enqueue(.marked, displayID: stroke.displayID, stroke: stroke, frameID: frame)
+        setMarking(NSEvent.modifierFlags.contains(.option))
+    }
+
+    private func startFrame(displayID: UInt32?) -> UUID? {
+        guard let fallback = NSScreen.underCursor.flatMap(Self.displayID) else { return nil }
+        let id = UUID()
+        let app = NSWorkspace.shared.frontmostApplication
+        let excluded = panels.map(\.windowNumber) + [toolbar?.windowNumber].compactMap { $0 }
+        frames[id] = Task {
+            try await ScreenNoteCapture.frame(displayID: displayID, fallbackDisplayID: fallback,
+                                              app: app, excludedWindows: excluded)
+        }
+        return id
+    }
+
+    private func enqueue(_ kind: ScreenNote.Kind, displayID: UInt32? = nil,
+                         stroke: ScreenInk.Stroke? = nil, frameID: UUID? = nil) {
+        guard let note else { return }
+        guard note.canCapture(kind, pending: pendingCaptures) else {
+            if let frameID { frames.removeValue(forKey: frameID)?.cancel() }
+            if kind == .marked { showLimit() }
             return
         }
-        let now = CACurrentMediaTime()
-        ink.prune(now: now)
-        let strokes = ink.strokes.filter { $0.displayID == displayID }
-            + (ink.active.map { [$0] } ?? [])
-        let file = note.directory.appendingPathComponent(String(format: "Shot %02d.png", note.shots.count + 1))
-        let elapsed = now - startedAt
-        let excluded = panels.map(\.windowNumber) + [toolbar?.windowNumber].compactMap { $0 }
-        captureBusy = true
+        guard let frameID = frameID ?? startFrame(displayID: displayID), let frame = frames[frameID] else { return }
+        let id = note.id
+        let elapsed = CACurrentMediaTime() - startedAt
+        let previous = captureTask
+        pendingCaptures += 1
         captureTask = Task { [weak self] in
+            await previous?.value
             guard let self else { return }
             do {
-                let bytes = try await ScreenNoteCapture.capture(
-                    displayID: displayID, pointSize: targetScreen.frame.size, excludedWindows: excluded,
-                    strokes: strokes, file: file)
+                let image = try await frame.value
                 try Task.checkCancellation()
-                guard sessionID == id else { return }
-                if self.note?.append(ScreenNote.Shot(file: file, elapsed: elapsed, byteCount: bytes)) == true {
+                guard self.note?.id == id, let current = self.note else { return }
+                let file = current.directory.appendingPathComponent(String(format: "Shot %02d.png", current.shots.count + 1))
+                let result = try await Task.detached(priority: .userInitiated) {
+                    try ScreenNoteCapture.save(image, strokes: stroke.map { [$0] } ?? [], file: file)
+                }.value
+                try Task.checkCancellation()
+                guard self.note?.id == id else { return }
+                if kind != .marked, fingerprints[image.displayID] == result.fingerprint {
+                    try FileManager.default.removeItem(at: file)
+                } else if self.note?.append(.init(file: file, elapsed: elapsed, byteCount: result.byteCount,
+                                                 kind: kind, appName: image.appName, displayName: image.displayName)) == true {
                     shotCount = self.note?.shots.count ?? 0
-                    ink.remove(ids: Set(strokes.map(\.id)))
-                    sync()
+                    fingerprints[image.displayID] = result.fingerprint
                 } else {
                     try FileManager.default.removeItem(at: file)
-                    warning = "The screenshot size limit was reached."
-                    core.showMessage("Screen note size limit reached. Finish this note first.", tone: .neutral)
+                    showLimit()
                 }
             } catch {
-                guard !Task.isCancelled, sessionID == id else { return }
-                if phase == .starting {
+                guard !Task.isCancelled, self.note?.id == id else { return }
+                warning = "A screenshot could not be captured."
+                if kind == .start {
                     stop()
                     core.showMessage(error.localizedDescription, tone: .danger)
                     return
                 }
-                warning = "The last screenshot could not be captured."
                 core.showMessage(error.localizedDescription, tone: .danger)
             }
-            captureBusy = false
-            captureTask = nil
-            if phase == .starting {
-                beginNarration()
-            } else if finishRequested, phase == .recording {
-                finishNote()
-            }
+            guard self.note?.id == id else { return }
+            frames.removeValue(forKey: frameID)
+            pendingCaptures -= 1
             publishIfReady()
         }
     }
 
+    private func showLimit() {
+        warning = "The screenshot limit was reached."
+        guard !limitShown else { return }
+        limitShown = true
+        core.showMessage("Screenshot limit reached. Narration continues.", tone: .neutral)
+    }
+
+    private func contextChanged() {
+        guard phase == .recording else { return }
+        finishMark()
+        setMarking(false)
+        contextTask?.cancel()
+        let id = note?.id
+        contextTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            guard let self, self.note?.id == id, self.phase == .recording, self.ink.active == nil else { return }
+            self.enqueue(.switched)
+        }
+    }
+
     func finishNote() {
-        guard phase == .recording, let id = sessionID else { return }
-        if captureBusy { finishRequested = true; return }
+        guard phase == .recording, let id = note?.id else { return }
+        finishMark()
+        setMarking(false)
         phase = .finishing
-        finishRequested = false
-        setDrawing(false)
+        markerMonitor.stop()
+        contextTask?.cancel()
         toolbar?.orderOut(nil)
         core.showProgress("Transcribing…", onCancel: { [weak self] in self?.stop() })
         core.dictation.endHandOff(id: id)
-        snap()
+        enqueue(.final)
         publishIfReady()
     }
 
     private func publishIfReady() {
-        guard phase == .finishing, !captureBusy, let result = transcriptResult, var prepared = note else { return }
+        guard phase == .finishing, pendingCaptures == 0,
+              let result = transcriptResult, var prepared = note else { return }
         switch result {
         case .transcript(let text, let issue): prepared.transcript = text; warning = issue ?? warning
         case .failed(let issue): warning = issue
@@ -232,71 +239,47 @@ final class ScreenNoteCoordinator {
                     try ScreenNoteClipboard.prepare(completed)
                 }.value
                 try Task.checkCancellation()
-                guard sessionID == completed.id, settings.screenNotesEnabled, settings.dictationEnabled else { return }
-                guard ScreenNoteClipboard.write(payload, to: .general) else {
-                    throw CocoaError(.fileWriteUnknown)
-                }
-                lastNote = completed
-                apply()
+                guard note?.id == completed.id, settings.screenNotesEnabled, settings.dictationEnabled else { return }
+                guard ScreenNoteClipboard.write(payload, to: .general) else { throw CocoaError(.fileWriteUnknown) }
+                publishedDirectory = completed.directory
                 let message = completed.transcript.isEmpty
                     ? "Copied \(completed.shots.count) screenshots; no speech captured."
-                    : "Copied \(completed.shots.count) screenshots and note."
+                    : "Copied screen note."
                 let issue = warning
                 stop()
                 core.showMessage(issue == nil ? message : message + " Speech or capture may be incomplete.",
                                  tone: issue == nil ? .success : .neutral)
                 pruneOutputs(keeping: completed.directory)
             } catch {
-                guard !Task.isCancelled, sessionID == completed.id else { return }
-                lastNote = completed
-                apply()
+                guard !Task.isCancelled, note?.id == completed.id else { return }
                 stop()
-                core.showMessage("Could not copy the screen note. Use Copy Last Screen Note to retry.", tone: .danger)
+                core.showMessage("Could not copy the screen note.", tone: .danger)
             }
         }
     }
 
-    func copyLastNote(textOnly: Bool = false) {
-        guard settings.screenNotesEnabled, !isActive, exportTask == nil, let lastNote else { return }
-        if textOnly {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(lastNote.text, forType: .string)
-            core.showMessage("Copied note text.")
-            return
-        }
-        exportTask = Task { [weak self] in
-            guard let self else { return }
-            defer { exportTask = nil }
-            do {
-                let payload = try await Task.detached { try ScreenNoteClipboard.prepare(lastNote) }.value
-                try Task.checkCancellation()
-                guard settings.screenNotesEnabled else { return }
-                guard ScreenNoteClipboard.write(payload, to: .general) else { throw CocoaError(.fileWriteUnknown) }
-                core.showMessage("Copied screenshots and note.")
-            } catch {
-                guard !Task.isCancelled else { return }
-                core.showMessage(error.localizedDescription, tone: .danger)
-            }
-        }
-    }
-
-    func stop(restoreFocus shouldRestore: Bool = true) {
+    func stop() {
         guard isActive else { return }
-        let id = sessionID
+        let id = note?.id
         let directory = note?.directory
-        let shouldRestore = shouldRestore && ownsKeyWindow
         let hadProgress = phase == .finishing || phase == .copying
         phase = .idle
-        sessionID = nil
+        note = nil
         if let id { core.dictation.cancelHandOff(id: id) }
         let pendingCapture = captureTask
         let pendingExport = exportTask
+        let pendingFrames = Array(frames.values)
         captureTask?.cancel()
         exportTask?.cancel()
-        expiryTask?.cancel()
+        contextTask?.cancel()
+        for frame in pendingFrames { frame.cancel() }
+        markerMonitor.stop()
         captureTask = nil
         exportTask = nil
-        expiryTask = nil
+        contextTask = nil
+        frames.removeAll()
+        activeFrame = nil
+        pendingCaptures = 0
         observations.removeAll()
         for panel in panels { panel.orderOut(nil); panel.contentView = nil }
         toolbar?.orderOut(nil)
@@ -304,36 +287,24 @@ final class ScreenNoteCoordinator {
         toolbar = nil
         panels.removeAll()
         canvases.removeAll()
-        ink.clear()
-        note = nil
-        drawingEnabled = false
-        canUndo = false
-        captureBusy = false
+        ink = ScreenInk()
+        marking = false
         if hadProgress { core.hideProgress() }
-        if shouldRestore { restoreFocus() }
-        previousWindow = nil
-        previousApp = nil
-        targetScreen = nil
-        if let directory, directory != lastNote?.directory {
-            remove(directory, after: pendingCapture, export: pendingExport)
+        if let directory, directory != publishedDirectory {
+            let previous = cleanupTask
+            cleanupTask = Task {
+                await previous?.value
+                await pendingCapture?.value
+                await pendingExport?.value
+                for frame in pendingFrames { _ = try? await frame.value }
+                _ = await Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: directory) }.value
+            }
         }
     }
 
     func prepareForTermination() async {
-        stop(restoreFocus: false)
-        exportTask?.cancel()
-        await exportTask?.value
+        stop()
         await cleanupTask?.value
-    }
-
-    private func remove(_ directory: URL, after capture: Task<Void, Never>? = nil, export: Task<Void, Never>? = nil) {
-        let previous = cleanupTask
-        cleanupTask = Task {
-            await previous?.value
-            await capture?.value
-            await export?.value
-            _ = await Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: directory) }.value
-        }
     }
 
     private func pruneOutputs(keeping directory: URL) {
@@ -345,7 +316,7 @@ final class ScreenNoteCoordinator {
                     at: directory.deletingLastPathComponent(), includingPropertiesForKeys: nil)) ?? []
             }.value
             let activeDirectory = self?.note?.directory
-            let publishedDirectory = self?.lastNote?.directory
+            let publishedDirectory = self?.publishedDirectory
             let stale = entries.filter {
                 $0 != directory && $0 != activeDirectory && $0 != publishedDirectory
                     && UUID(uuidString: $0.lastPathComponent) != nil
@@ -356,109 +327,41 @@ final class ScreenNoteCoordinator {
         }
     }
 
-    private func restoreFocus() {
-        if let previousWindow, previousWindow.isVisible {
-            previousWindow.makeKeyAndOrderFront(nil)
-        } else {
-            previousApp?.activate()
-        }
-    }
-
-    private var ownsKeyWindow: Bool {
-        guard let key = NSApp.keyWindow else { return false }
-        return key === toolbar || panels.contains { $0 === key }
-    }
-
-    func begin(at point: CGPoint, displayID: UInt32, arrow: Bool) {
-        guard isDrawing else { return }
-        ink.begin(at: point, displayID: displayID, tool: arrow ? .arrow : settings.screenNotesTool,
-                  color: settings.screenNotesColor, width: settings.screenNotesWidth)
-        syncActive()
-        canUndo = true
-    }
-
-    func append(_ point: CGPoint) {
-        ink.append(point)
-        if let stroke = ink.active { canvases[stroke.displayID]?.showActive(stroke) }
-    }
-
-    func finish() {
-        ink.finish(now: CACurrentMediaTime(), lifetime: isNarrating ? .manual : settings.screenNotesLifetime)
-        sync()
-    }
-
-    func undo() { ink.undo(now: CACurrentMediaTime()); sync() }
-    func clear() { ink.clear(); sync() }
-
-    func handleKey(_ key: String) {
-        if key == " ", isNarrating { snap(); return }
-        if key == "d" { toggleDrawing(); return }
-        if let index = Int(key), (1...ScreenInk.Color.allCases.count).contains(index) {
-            settings.screenNotesColor = ScreenInk.Color.allCases[index - 1]
-        } else if key == "p" {
-            settings.screenNotesTool = .pen
-        } else if key == "a" {
-            settings.screenNotesTool = .arrow
-        } else if key == "[" || key == "]" {
-            let widths = ScreenInk.Width.allCases
-            let index = widths.firstIndex(of: settings.screenNotesWidth) ?? 1
-            settings.screenNotesWidth = widths[min(widths.count - 1, max(0, index + (key == "]" ? 1 : -1)))]
-        }
-    }
-
-    private func syncActive() { for canvas in canvases.values { canvas.showActive(ink.active) } }
-
-    private func sync() {
-        let now = CACurrentMediaTime()
-        ink.prune(now: now)
-        syncActive()
-        for canvas in canvases.values { canvas.sync(ink.strokes, now: now) }
-        canUndo = ink.active != nil || !ink.strokes.isEmpty
-        expiryTask?.cancel()
-        expiryTask = nil
-        guard let expiry = ink.nextExpiry else { return }
-        expiryTask = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(max(0, expiry - now))) } catch { return }
-            guard !Task.isCancelled else { return }
-            self?.sync()
-        }
-    }
-
-    private func showPanels(on screens: [NSScreen], toolbarScreen: NSScreen) {
-        for screen in screens {
+    private func showPanels(toolbarScreen: NSScreen) {
+        for screen in NSScreen.screens {
             guard let displayID = Self.displayID(screen) else { continue }
-            let panel = ScreenNotePanel(screen: screen, coordinator: self)
+            let panel = ScreenNotePanel(screen: screen)
             let canvas = ScreenInkView(frame: NSRect(origin: .zero, size: screen.frame.size),
                                        displayID: displayID, coordinator: self)
             panel.contentView = canvas
+            panel.ignoresMouseEvents = true
             canvases[displayID] = canvas
             panels.append(panel)
             panel.orderFrontRegardless()
         }
-        let panel = ScreenNotePanel(screen: toolbarScreen, coordinator: self)
+        let panel = ScreenNotePanel(screen: toolbarScreen)
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
-        let host = NSHostingView(rootView: ScreenNoteToolbar().environment(self).environment(settings))
+        let host = NSHostingView(rootView: ScreenNoteToolbar().environment(self))
         host.sizingOptions = []
         panel.contentView = host
-        let size = isNarrating ? Theme.Size.screenNoteCaptureToolbar : Theme.Size.screenNotesToolbar
+        let size = Theme.Size.screenNotesToolbar
         panel.setFrame(NSRect(x: toolbarScreen.visibleFrame.midX - size.width / 2,
                               y: toolbarScreen.visibleFrame.maxY - size.height - Theme.Spacing.xl,
                               width: size.width, height: size.height), display: false)
         panel.orderFrontRegardless()
         toolbar = panel
-        setDrawing(true)
     }
 
-    private static func displayID(_ screen: NSScreen) -> UInt32? {
+    static func displayID(_ screen: NSScreen) -> UInt32? {
         (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
 
-    private func observe(_ name: Notification.Name, center: NotificationCenter) {
-        let session = sessionID
+    private func observe(_ name: Notification.Name, center: NotificationCenter, context: Bool) {
+        let session = note?.id
         let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.sessionID == session else { return }
-                self.stop(restoreFocus: false)
+                guard let self, self.note?.id == session else { return }
+                if context { self.contextChanged() } else { self.stop() }
             }
         }
         observations.append(NotificationToken(token, center: center))
