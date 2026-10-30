@@ -3,13 +3,12 @@ import SwiftUI
 
 struct FileTranscriptionView: View {
     @Environment(DictationCoordinator.self) private var dictation
-    @State private var isDropTargeted = false
 
     private var state: FileTranscriptionController { dictation.fileTranscription }
     private var provider: TranscriptionProviderSettings { dictation.settings.transcriptionProviderSettings }
     private var displayedProvider: TranscriptionProvider { state.activeProvider ?? provider.provider }
     private var missingCredential: Bool {
-        state.stagedFile != nil && state.result == nil && provider.apiKey.isEmpty && !state.isTranscribing
+        state.stagedFile != nil && state.result == nil && provider.apiKey.isEmpty && !state.isBusy
     }
 
     var body: some View {
@@ -21,13 +20,8 @@ struct FileTranscriptionView: View {
             footer
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .dropDestination(for: URL.self) { files, _ in
-            guard !state.isTranscribing, let file = files.first else { return false }
-            dictation.stageTranscriptionFile(file)
-            return true
-        } isTargeted: { isDropTargeted = $0 }
         .overlay {
-            if isDropTargeted && !state.isTranscribing {
+            if dictation.isFileDropTargeted && !state.isBusy {
                 RoundedRectangle(cornerRadius: Theme.Radius.card)
                     .strokeBorder(Theme.Colors.dropTarget, style: StrokeStyle(
                         lineWidth: Theme.Size.dropHintStroke, dash: [Theme.Size.dropHintDash]
@@ -40,7 +34,7 @@ struct FileTranscriptionView: View {
             dictation.setFileTranscriptionLanguage(state.language)
         }
         .onChange(of: state.isTranscribing) {
-            if !state.isTranscribing { dictation.setFileTranscriptionLanguage(state.language) }
+            if !state.isBusy { dictation.setFileTranscriptionLanguage(state.language) }
         }
     }
 
@@ -55,8 +49,8 @@ struct FileTranscriptionView: View {
             } else if let error = state.error {
                 SettingsNotice(error)
             }
-            if state.isTranscribing {
-                ProgressView("Transcribing…")
+            if state.isBusy {
+                ProgressView(state.processingLabel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let result = state.result {
                 ScrollView {
@@ -86,7 +80,7 @@ struct FileTranscriptionView: View {
                 .truncationMode(.middle)
                 .help(file.path)
             Spacer(minLength: Theme.Spacing.md)
-            if !state.isTranscribing {
+            if !state.isBusy {
                 Button { dictation.clearTranscriptionFile() } label: {
                     Image(systemName: "xmark")
                 }
@@ -107,7 +101,11 @@ struct FileTranscriptionView: View {
             }
             Text(state.stagedFile == nil ? "Drop an audio file" : "Drop another audio file")
                 .foregroundStyle(.secondary)
-            chooseFileButton
+            HStack(spacing: Theme.Spacing.md) {
+                chooseFileButton
+                Button("Paste") { dictation.pasteTranscriptionFile() }
+                    .help("Paste audio file (⌘V)")
+            }
         }
         .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -134,13 +132,13 @@ struct FileTranscriptionView: View {
             .frame(maxWidth: Theme.Size.fileTranscriptionLanguageWidth)
             .lineLimit(1)
             .help(state.language.displayName)
-            .disabled(state.isTranscribing)
+            .disabled(state.isBusy)
             Button { dictation.showFileTranscriptionSettings() } label: {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .disabled(state.isTranscribing)
+            .disabled(state.isBusy)
             .accessibilityLabel("Dictation settings")
             .help("Dictation settings")
             Spacer(minLength: Theme.Spacing.md)
@@ -154,7 +152,7 @@ struct FileTranscriptionView: View {
 
     @ViewBuilder
     private var actions: some View {
-        if state.isTranscribing {
+        if state.isBusy {
             Button("Cancel") { dictation.cancelFileTranscription() }
                 .keyboardShortcut(.cancelAction)
         } else if let result = state.result {

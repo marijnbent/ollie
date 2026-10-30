@@ -699,7 +699,10 @@ The `ollie-*-test` harnesses exercise imported services, clipboard storage, seri
 recording cancellation and reconnect, and verified paste restoration with synthetic files and fake
 providers. Dictation also covers audio-only QuickTime import, embedded-text exclusion, batch Scribe
 requests, converted WAV compatibility, local audio validation, explicit start after staging,
-replacement guards during a job, import cancellation and results with History off.
+replacement guards during a job, import cancellation and results with History off. Private pasteboards
+cover native promise discovery, synthetic receiver callbacks, cancellation of an unfinished export,
+export failure cleanup, retained received files and windowless ⌘V routing. No real clipboard contents
+are read and no input events are posted by these tests.
 Settings history tests cover feature visibility, filtered search and disabled-pane routing.
 No live transcription API key is needed.
 

@@ -40,8 +40,8 @@ struct CompactMenuView: View {
             if core.settings.allows(.feature(.dictation)), core.dictation.isBusy {
                 HStack(spacing: 10) {
                     Image(systemName: core.dictation.session.isRecording ? "waveform" : "ellipsis").foregroundStyle(.red)
-                    Text(core.dictation.fileTranscription.isTranscribing && !core.dictation.session.isRecording
-                         ? "Transcribing file…" : core.dictation.session.statusMessage)
+                    Text(core.dictation.fileTranscription.isBusy && !core.dictation.session.isRecording
+                         ? core.dictation.fileTranscription.processingLabel : core.dictation.session.statusMessage)
                         .font(.system(size: 11)).lineLimit(1)
                     Spacer()
                     if core.dictation.session.isRecording {

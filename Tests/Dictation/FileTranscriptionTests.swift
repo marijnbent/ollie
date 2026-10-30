@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 enum FileTranscriptionTests {
     static func run() async throws {
+        try await FileTranscriptionImportTests.run()
         try await audioOnlyConversion()
         await historyAndCancellation()
     }

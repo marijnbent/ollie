@@ -102,8 +102,13 @@ Cancelled dictation deletes managed raw recordings only when no history entry ad
 cancellation during enhancement. Paste or insertion-verification failure preserves adopted recordings.
 
 The launcher’s **Transcribe Audio File** command and **Dictation → History → Transcribe File…**
-open a dedicated **Transcribe Audio** window without opening a file picker. Drop an audio file or
-use **Choose File…** (⌘O), check the per-file language and press **Transcribe** (Return).
+open a dedicated **Transcribe Audio** window without opening a file picker. Drop an audio file,
+paste one with **Paste** or ⌘V, or use **Choose File…** (⌘O). Check the per-file language and press
+**Transcribe** (Return). Native file promises, including Voice Memos exports, are received into a
+private staging folder before validation. Importing shows progress and can be cancelled. Copied text
+or a built-in transcript is rejected rather than treated as audio. Received exports stay available
+across closing the window and are removed on replacement, clearing or shutdown; original files are
+never deleted. Shutdown waits for any transcription using the received file before removing it.
 Choosing or dropping only stages a file; the explicit action starts the upload. The per-file language
 does not change live dictation. One file is handled at a time; new drops are refused during a job.
 The selected provider’s prerecorded API is used. ElevenLabs uses `scribe_v2`, not the live model.
