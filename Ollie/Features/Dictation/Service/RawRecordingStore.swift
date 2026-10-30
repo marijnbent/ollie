@@ -63,7 +63,8 @@ final class RawRecordingStore {
                 enhancementModel: entry.enhancementModel,
                 rawRecordingFileURL: migratedURL,
                 transcriptionLanguage: entry.transcriptionLanguage,
-                usedActiveAppPrompt: entry.usedActiveAppPrompt
+                usedActiveAppPrompt: entry.usedActiveAppPrompt,
+                sourceFileName: entry.sourceFileName
             )
         }
     }

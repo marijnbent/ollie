@@ -9,25 +9,13 @@ enum ElevenLabsPrerecordedClient {
     static func transcribe(fileURL: URL, apiKey: String, language: DeepgramLanguage) async throws -> String {
         let session = DictationHTTP.session()
         defer { session.invalidateAndCancel() }
-        let fileData: Data
-        do {
-            fileData = try Data(contentsOf: fileURL)
-        } catch {
-            throw ElevenLabsPrerecordedError.requestFailed(reason: error.localizedDescription)
-        }
-
         let boundary = "Talkie-ElevenLabs-\(UUID().uuidString)"
-        let body = try makeMultipartBody(
-            fileData: fileData,
-            fileName: fileURL.lastPathComponent,
-            contentType: contentType(for: fileURL),
-            language: language,
-            boundary: boundary
-        )
+        let body = try makeMultipartFile(fileURL: fileURL, language: language, boundary: boundary)
+        defer { try? FileManager.default.removeItem(at: body) }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        request.timeoutInterval = 900
         request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -35,7 +23,7 @@ enum ElevenLabsPrerecordedClient {
         while true {
             attempt += 1
             do {
-                let (data, response) = try await session.upload(for: request, from: body)
+                let (data, response) = try await session.upload(for: request, fromFile: body)
                 guard let httpResponse = response as? HTTPURLResponse else {
                     throw ElevenLabsPrerecordedError.invalidResponse
                 }
@@ -69,24 +57,41 @@ enum ElevenLabsPrerecordedClient {
         }
     }
 
-    static func makeMultipartBody(
-        fileData: Data,
-        fileName: String,
-        contentType: String,
+    static func makeMultipartFile(
+        fileURL: URL,
         language: DeepgramLanguage,
         boundary: String
-    ) throws -> Data {
+    ) throws -> URL {
         var body = Data()
         appendField("model_id", value: model, to: &body, boundary: boundary)
         if let languageCode = elevenLabsLanguageCode(for: language) {
             appendField("language_code", value: languageCode, to: &body, boundary: boundary)
         }
         body.append(Data("--\(boundary)\r\n".utf8))
-        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(escapedFileName(fileName))\"\r\n".utf8))
-        body.append(Data("Content-Type: \(contentType)\r\n\r\n".utf8))
-        body.append(fileData)
-        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
-        return body
+        let fileName = escapedFileName(fileURL.lastPathComponent)
+        let disposition = "Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n"
+        body.append(Data(disposition.utf8))
+        body.append(Data("Content-Type: \(contentType(for: fileURL))\r\n\r\n".utf8))
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        guard FileManager.default.createFile(atPath: destination.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        do {
+            let input = try FileHandle(forReadingFrom: fileURL)
+            defer { try? input.close() }
+            let output = try FileHandle(forWritingTo: destination)
+            defer { try? output.close() }
+            try output.write(contentsOf: body)
+            while let chunk = try input.read(upToCount: 1_048_576), !chunk.isEmpty {
+                try Task.checkCancellation()
+                try output.write(contentsOf: chunk)
+            }
+            try output.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
+            return destination
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
     }
 
     static func decodeResponse(_ data: Data) throws -> ElevenLabsPrerecordedResponse {

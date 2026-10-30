@@ -27,6 +27,7 @@ private final class HistoryFixture: TranscriptHistoryPersisting, @unchecked Send
 @main @MainActor struct OllieDictationTests {
     static func main() async throws {
         try mercuryRequests()
+        try await FileTranscriptionTests.run()
         await PasteRuntimeTests().testHandOffPreservesHistoryWithoutTouchingClipboard()
         await RecordingRuntimeTests().testUnenhancedRecordingReportsEveryAbandonedExit()
         await RecordingRuntimeTests().testTimedSpeechUsesAudioTimeAndWaitsThroughFinalization()

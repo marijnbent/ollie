@@ -95,30 +95,43 @@ enum MusePrerecordedClient {
     }
 
     static func normalizedWAV(_ data: Data) throws -> Data {
-        guard data.count >= 44,
+        guard data.count >= 12,
               String(data: data[0..<4], encoding: .ascii) == "RIFF",
-              String(data: data[8..<12], encoding: .ascii) == "WAVE",
-              String(data: data[12..<16], encoding: .ascii) == "fmt ",
-              String(data: data[36..<40], encoding: .ascii) == "data",
-              readUInt16(data, at: 20) == 1,
-              readUInt16(data, at: 34) == 16 else {
+              String(data: data[8..<12], encoding: .ascii) == "WAVE" else {
             throw MusePrerecordedError.unsupportedRecording
         }
-
-        let channels = Int(readUInt16(data, at: 22))
-        let sampleRate = Int(readUInt32(data, at: 24))
-        let declaredByteCount = Int(readUInt32(data, at: 40))
-        guard channels > 0,
-              sampleRate > 0,
-              declaredByteCount > 0,
-              declaredByteCount <= data.count - 44 else {
+        var format: Range<Int>?
+        var audio: Range<Int>?
+        var offset = 12
+        while offset <= data.count - 8 {
+            let size = Int(readUInt32(data, at: offset + 4))
+            let start = offset + 8
+            guard size <= data.count - start else { throw MusePrerecordedError.unsupportedRecording }
+            let chunk = start..<(start + size)
+            switch String(bytes: data[offset..<(offset + 4)], encoding: .ascii) {
+            case "fmt ": format = chunk
+            case "data": audio = chunk
+            default: break
+            }
+            offset = chunk.upperBound + size % 2
+        }
+        guard let format, format.count >= 16,
+              let audio, !audio.isEmpty,
+              readUInt16(data, at: format.lowerBound + 14) == 16 else {
             throw MusePrerecordedError.unsupportedRecording
         }
+        let encoding = readUInt16(data, at: format.lowerBound)
+        let isExtendedPCM = encoding == 0xfffe && format.count >= 40
+            && readUInt32(data, at: format.lowerBound + 24) == 1
+        guard encoding == 1 || isExtendedPCM else { throw MusePrerecordedError.unsupportedRecording }
+        let channels = Int(readUInt16(data, at: format.lowerBound + 2))
+        let sampleRate = Int(readUInt32(data, at: format.lowerBound + 4))
+        guard channels > 0, sampleRate > 0 else { throw MusePrerecordedError.unsupportedRecording }
 
         let converter = MusePCMConverter(
             format: AudioStreamFormat(sampleRate: sampleRate, channels: channels)
         )
-        var pcmData = converter.convert(Data(data[44..<(44 + declaredByteCount)]))
+        var pcmData = converter.convert(Data(data[audio]))
         pcmData.append(converter.finish())
         guard !pcmData.isEmpty else {
             throw MusePrerecordedError.unsupportedRecording
