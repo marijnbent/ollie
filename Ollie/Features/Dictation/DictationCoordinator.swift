@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -17,6 +18,8 @@ final class DictationCoordinator: HealthCheckable {
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var historyLoaded = false
+    @ObservationIgnored private var filePanel: NSOpenPanel?
+    @ObservationIgnored private var fileSelectionTask: Task<Void, Never>?
     @ObservationIgnored private lazy var windows = DictationWindowCoordinator(settings: settings, session: session) { [weak self] in
         self?.core.settingsCoordinator.showSettings(tab: .dictation)
     }
@@ -41,12 +44,16 @@ final class DictationCoordinator: HealthCheckable {
     @ObservationIgnored private(set) lazy var shortcutControls = DictationShortcutsController(settingsStore: settings)
     @ObservationIgnored private(set) lazy var enhancementControls = DictationEnhancementsController(settingsStore: settings, promptRoutingService: prompts)
     @ObservationIgnored private(set) lazy var historyControls = DictationHistoryController(settingsStore: settings, sessionState: session)
+    @ObservationIgnored private(set) lazy var fileTranscription = FileTranscriptionController(
+        session: session, transcriber: FileTranscriptionClient.transcribe
+    )
     @ObservationIgnored private(set) lazy var logControls = DictationLogsController(sessionState: session)
     private(set) var isRunning = false
     private(set) var isProcessing = false
     private(set) var conflict: String?
+    private(set) var historyRequest: UUID?
     var isCapturingShortcut = false { didSet { apply() } }
-    var isBusy: Bool { session.recordingPhase != .idle || isProcessing }
+    var isBusy: Bool { session.recordingPhase != .idle || isProcessing || fileTranscription.isTranscribing }
 
     init(core: AppCore, ticker: HealthTicker) {
         self.core = core
@@ -77,6 +84,40 @@ final class DictationCoordinator: HealthCheckable {
         permissions.refreshPermissions()
         loadHistory()
     }
+
+    func chooseTranscriptionFile() {
+        guard core.settings.dictationEnabled, filePanel == nil, fileSelectionTask == nil,
+              !fileTranscription.isTranscribing else { return }
+        historyRequest = UUID()
+        core.settingsCoordinator.showSettings(tab: .dictation)
+        prepareSettings()
+        let panel = NSOpenPanel()
+        filePanel = panel
+        defer { filePanel = nil }
+        panel.title = "Transcribe Audio File"
+        panel.prompt = "Transcribe"
+        panel.allowedContentTypes = [.audio, UTType(importedAs: "com.apple.quicktime-audio")]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, core.settings.dictationEnabled, let url = panel.url else { return }
+        fileSelectionTask = Task { [weak self] in
+            guard let self else { return }
+            defer { fileSelectionTask = nil }
+            await loadTask?.value
+            guard !Task.isCancelled, core.settings.dictationEnabled else { return }
+            guard historyLoaded else {
+                core.showMessage("Could not read transcript history. Reopen Dictation settings and try again.", tone: .danger)
+                return
+            }
+            fileTranscription.start(
+                fileURL: url, settings: settings.transcriptionProviderSettings,
+                language: settings.deepgramLanguage,
+                historyLimit: { [weak self] in self?.settings.historyLimit ?? .none }
+            )
+        }
+    }
+
+    func consumeHistoryRequest() { historyRequest = nil }
 
     private func loadHistory() {
         guard !historyLoaded, loadTask == nil else { return }
@@ -150,7 +191,10 @@ final class DictationCoordinator: HealthCheckable {
         runtime.toggleFromMenu()
     }
 
-    func cancelRecording() { runtime.cancelFromEsc() }
+    func cancelRecording() {
+        runtime.cancelFromEsc()
+        fileTranscription.cancel()
+    }
 
     func beginHandOff(_ delivery: TranscriptHandOff) -> TranscriptHandOff.Start {
         guard isRunning else { return .unavailable("Enable and configure Dictation first.") }
@@ -166,6 +210,9 @@ final class DictationCoordinator: HealthCheckable {
     func cancelHandOff(id: UUID) { runtime.cancelHandOff(id: id) }
 
     func stop() {
+        filePanel?.cancel(nil)
+        fileSelectionTask?.cancel()
+        fileTranscription.cancel()
         generation += 1
         loadTask?.cancel()
         transition?.cancel()
@@ -178,6 +225,8 @@ final class DictationCoordinator: HealthCheckable {
 
     func prepareForTermination() async -> Bool {
         stop()
+        await fileSelectionTask?.value
+        await fileTranscription.finish()
         await loadTask?.value
         await runtime.finishStopping()
         if !historyLoaded, session.transcriptHistory.isEmpty { return true }

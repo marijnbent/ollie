@@ -21,11 +21,14 @@ enum PrerecordedTranscriptionClient {
                 language: normalizedLanguage
             )
         case .assemblyAI:
+            let session = DictationHTTP.session()
+            defer { session.invalidateAndCancel() }
             return try await AssemblyAIPrerecordedClient.transcribe(
                 fileURL: fileURL,
                 apiKey: settings.apiKey,
                 language: normalizedLanguage,
-                automaticLanguageCandidates: settings.automaticLanguageCandidates
+                automaticLanguageCandidates: settings.automaticLanguageCandidates,
+                session: session
             )
         case .muse:
             return try await MusePrerecordedClient.transcribe(

@@ -42,7 +42,8 @@ final class TranscriptHistoryStore: TranscriptHistoryPersisting, @unchecked Send
                     enhancementModel: entry.enhancementModel,
                     rawRecordingFileURL: nil,
                     transcriptionLanguage: entry.transcriptionLanguage,
-                    usedActiveAppPrompt: entry.usedActiveAppPrompt
+                    usedActiveAppPrompt: entry.usedActiveAppPrompt,
+                    sourceFileName: entry.sourceFileName
                 )
             }
 

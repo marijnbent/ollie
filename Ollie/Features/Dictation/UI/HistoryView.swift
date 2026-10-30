@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HistoryView: View {
+    @Environment(DictationCoordinator.self) private var dictation
     @Bindable var viewModel: DictationHistoryController
 
     var body: some View {
@@ -8,6 +9,7 @@ struct HistoryView: View {
         let retryLanguages = viewModel.retryTranscriptionLanguages
 
         Group {
+            fileImport
             if entries.isEmpty {
                 emptyState
             } else {
@@ -37,6 +39,35 @@ struct HistoryView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private var fileImport: some View {
+        let importState = dictation.fileTranscription
+        return Section {
+            HStack {
+                Button("Transcribe File…", systemImage: "waveform.badge.plus") {
+                    dictation.chooseTranscriptionFile()
+                }
+                .disabled(importState.isTranscribing)
+                Spacer()
+                if importState.isTranscribing {
+                    ProgressView().controlSize(.small)
+                    Button("Cancel") { importState.cancel() }
+                }
+            }
+            if importState.isTranscribing, let fileName = importState.fileName {
+                Text(fileName).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+            }
+            if let error = importState.error { SettingsNotice(error) }
+            if let result = importState.result, !viewModel.transcriptHistory.contains(where: { $0.id == result.id }) {
+                HStack {
+                    Text(result.sourceFileName ?? "Transcript").lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    Button("Copy", systemImage: "doc.on.doc") { viewModel.copy(result.text) }
+                }
+                Text(result.text).textSelection(.enabled)
             }
         }
     }
@@ -100,6 +131,12 @@ private struct HistoryEntryCard: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if let fileName = entry.sourceFileName {
+                Text(fileName)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(fileName)
+            }
             Text(entry.timestamp, format: .dateTime.day().month(.abbreviated).hour().minute())
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
@@ -168,6 +205,7 @@ private struct HistoryEntryCard: View {
             .foregroundStyle(isEmphasized ? Color.accentColor : .secondary)
 
             Text(text)
+                .textSelection(.enabled)
                 .lineLimit(isExpanded ? nil : 4)
                 .lineSpacing(2)
                 .frame(maxWidth: .infinity, alignment: .leading)

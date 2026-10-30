@@ -593,7 +593,8 @@ final class DictationHistoryController {
                 enhancementModel: current.enhancementModel,
                 rawRecordingFileURL: current.rawRecordingFileURL,
                 transcriptionLanguage: transcriptionLanguage ?? current.transcriptionLanguage,
-                usedActiveAppPrompt: current.usedActiveAppPrompt
+                usedActiveAppPrompt: current.usedActiveAppPrompt,
+                sourceFileName: current.sourceFileName
             )
         }
     }

@@ -291,6 +291,7 @@ struct TranscriptHistoryEntry: Codable, Identifiable {
     let rawRecordingFileURL: URL?
     let transcriptionLanguage: DeepgramLanguage?
     let usedActiveAppPrompt: Bool
+    let sourceFileName: String?
 
     init(
         id: UUID = UUID(),
@@ -305,7 +306,8 @@ struct TranscriptHistoryEntry: Codable, Identifiable {
         enhancementModel: String? = nil,
         rawRecordingFileURL: URL? = nil,
         transcriptionLanguage: DeepgramLanguage? = nil,
-        usedActiveAppPrompt: Bool = false
+        usedActiveAppPrompt: Bool = false,
+        sourceFileName: String? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -320,6 +322,7 @@ struct TranscriptHistoryEntry: Codable, Identifiable {
         self.rawRecordingFileURL = rawRecordingFileURL
         self.transcriptionLanguage = transcriptionLanguage
         self.usedActiveAppPrompt = usedActiveAppPrompt
+        self.sourceFileName = sourceFileName
     }
 
     var displayText: String {

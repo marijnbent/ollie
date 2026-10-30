@@ -53,6 +53,7 @@ extension SettingsTab {
         case .quicklinks:
             [.createQuicklink, .searchQuicklinks, .importQuicklinks, .exportQuicklinks]
         case .screenNotes: [.explainScreen]
+        case .dictation: [.transcribeAudioFile]
         case .clipboard: [.clipboardHistory]
         case .ai: [.quickAI, .aiChat]
         case .quickActions: [.fixGrammar, .rewrite, .translate, .summarize]
