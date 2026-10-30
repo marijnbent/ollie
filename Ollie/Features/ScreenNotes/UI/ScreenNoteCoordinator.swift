@@ -15,6 +15,8 @@ final class ScreenNoteCoordinator {
     @ObservationIgnored private var shiftAnchor: (point: CGPoint, displayID: UInt32)?
     @ObservationIgnored private var activeFrame: UUID?
     @ObservationIgnored private var activeContext: ScreenNote.Context?
+    @ObservationIgnored private var activeStart: TimeInterval = 0
+    @ObservationIgnored private var lastShot: (file: URL, frame: ScreenNoteCapture.Frame, strokes: [ScreenInk.Stroke])?
     @ObservationIgnored private var note: ScreenNote?
     @ObservationIgnored private var panels: [ScreenNotePanel] = []
     @ObservationIgnored private var toolbar: ScreenNotePanel?
@@ -66,6 +68,7 @@ final class ScreenNoteCoordinator {
         limitShown = false
         transcriptResult = nil
         fingerprints.removeAll()
+        lastShot = nil
         phase = .recording
         let start = core.dictation.beginHandOff(TranscriptHandOff(id: id, requestFinish: { [weak self] in
             guard let self, self.note?.id == id else { return }
@@ -129,6 +132,7 @@ final class ScreenNoteCoordinator {
     private func begin(at point: CGPoint, displayID: UInt32) {
         guard let context = selectContext(displayID: displayID) else { return }
         activeContext = context
+        activeStart = CACurrentMediaTime() - startedAt
         ink.begin(at: point, displayID: displayID)
         activeFrame = startFrame(context: context)
         canvases[displayID]?.begin(point)
@@ -146,7 +150,7 @@ final class ScreenNoteCoordinator {
         activeFrame = nil
         activeContext = nil
         canvases[stroke.displayID]?.fade()
-        enqueue(.marked, context: context, stroke: stroke, frameID: frame)
+        enqueue(.marked, context: context, stroke: stroke, frameID: frame, markedAt: activeStart)
     }
 
     private func startFrame(context: ScreenNote.Context) -> UUID {
@@ -159,7 +163,7 @@ final class ScreenNoteCoordinator {
     }
 
     private func enqueue(_ kind: ScreenNote.Kind, context: ScreenNote.Context? = nil,
-                         stroke: ScreenInk.Stroke? = nil, frameID: UUID? = nil) {
+                         stroke: ScreenInk.Stroke? = nil, frameID: UUID? = nil, markedAt: TimeInterval = 0) {
         guard let note, let context = context ?? note.contexts.last else { return }
         guard note.canCapture(kind, pending: pendingCaptures) else {
             if let frameID { frames.removeValue(forKey: frameID)?.cancel() }
@@ -179,21 +183,9 @@ final class ScreenNoteCoordinator {
                 let image = try await frame.value
                 try Task.checkCancellation()
                 guard self.note?.id == id, let current = self.note else { return }
-                let file = current.directory.appendingPathComponent(String(format: "Shot %02d.png", current.shots.count + 1))
-                let result = try await Task.detached(priority: .userInitiated) {
-                    try ScreenNoteCapture.save(image, strokes: stroke.map { [$0] } ?? [], file: file)
-                }.value
-                try Task.checkCancellation()
-                guard self.note?.id == id else { return }
-                if kind != .marked, fingerprints[image.displayID] == result.fingerprint {
-                    try FileManager.default.removeItem(at: file)
-                } else if self.note?.append(.init(file: file, elapsed: elapsed, byteCount: result.byteCount,
-                                                 kind: kind, contextID: context.id)) == true {
-                    shotCount = self.note?.shots.count ?? 0
-                    fingerprints[image.displayID] = result.fingerprint
-                } else {
-                    try FileManager.default.removeItem(at: file)
-                    showLimit()
+                if try await !addToLastShot(stroke, image: image, context: context, markedAt: markedAt) {
+                    try await saveShot(kind, image: image, context: context, stroke: stroke,
+                                       elapsed: elapsed, markedAt: markedAt, note: current)
                 }
             } catch {
                 guard !Task.isCancelled, self.note?.id == id else { return }
@@ -209,6 +201,44 @@ final class ScreenNoteCoordinator {
             frames.removeValue(forKey: frameID)
             pendingCaptures -= 1
             publishIfReady()
+        }
+    }
+
+    private func addToLastShot(_ stroke: ScreenInk.Stroke?, image: ScreenNoteCapture.Frame,
+                               context: ScreenNote.Context, markedAt: TimeInterval) async throws -> Bool {
+        guard let stroke, let last = lastShot, note?.shots.last?.file == last.file,
+              note?.shots.last?.contextID == context.id, last.frame.displayID == image.displayID else { return false }
+        let strokes = last.strokes + [stroke]
+        let merged = try await Task.detached(priority: .userInitiated) {
+            guard ScreenNoteImage.looksSame(last.frame.image, image.image) else { return nil as Int? }
+            return try ScreenNoteCapture.save(last.frame, strokes: strokes, file: last.file).byteCount
+        }.value
+        try Task.checkCancellation()
+        guard let merged, note?.shots.last?.file == last.file else { return false }
+        note?.addMark(at: markedAt, byteCount: merged)
+        lastShot = (last.file, last.frame, strokes)
+        return true
+    }
+
+    private func saveShot(_ kind: ScreenNote.Kind, image: ScreenNoteCapture.Frame, context: ScreenNote.Context,
+                          stroke: ScreenInk.Stroke?, elapsed: TimeInterval, markedAt: TimeInterval,
+                          note current: ScreenNote) async throws {
+        let file = current.directory.appendingPathComponent(String(format: "Shot %02d.png", current.shots.count + 1))
+        let result = try await Task.detached(priority: .userInitiated) {
+            try ScreenNoteCapture.save(image, strokes: stroke.map { [$0] } ?? [], file: file)
+        }.value
+        try Task.checkCancellation()
+        guard note?.id == current.id else { return }
+        if kind != .marked, fingerprints[image.displayID] == result.fingerprint {
+            try FileManager.default.removeItem(at: file)
+        } else if note?.append(.init(file: file, elapsed: elapsed, byteCount: result.byteCount, kind: kind,
+                                     contextID: context.id, marks: stroke == nil ? [] : [markedAt])) == true {
+            shotCount = note?.shots.count ?? 0
+            fingerprints[image.displayID] = result.fingerprint
+            lastShot = kind == .final ? nil : (file, image, stroke.map { [$0] } ?? [])
+        } else {
+            try FileManager.default.removeItem(at: file)
+            showLimit()
         }
     }
 
@@ -319,6 +349,7 @@ final class ScreenNoteCoordinator {
         frames.removeAll()
         activeFrame = nil
         activeContext = nil
+        lastShot = nil
         pendingCaptures = 0
         observations.removeAll()
         for panel in panels { panel.orderOut(nil); panel.contentView = nil }

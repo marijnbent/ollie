@@ -6,6 +6,8 @@ import ImageIO
 struct ScreenInkTests {
     static func main() throws {
         try compositing()
+        sameScreen()
+        numberedLines()
         noteLimits()
         speechContexts()
         let displays: [(id: UInt32, frame: CGRect)] = [
@@ -73,6 +75,43 @@ struct ScreenInkTests {
         note.speech = []
         precondition(note.caption(for: note.shots[0]).contains(note.transcript))
         precondition(note.text.contains("Speech timing unavailable."))
+    }
+
+    static func screen(_ draw: (CGContext) -> Void = { _ in }) -> CGImage {
+        let context = CGContext(data: nil, width: 1280, height: 800, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 1280, height: 800))
+        context.setFillColor(CGColor(gray: 0, alpha: 1))
+        context.fill(CGRect(x: 100, y: 600, width: 400, height: 40))
+        draw(context)
+        return context.makeImage()!
+    }
+
+    static func sameScreen() {
+        let base = screen()
+        let caret = screen { $0.fill(CGRect(x: 700, y: 300, width: 2, height: 20)) }
+        let menu = screen { $0.fill(CGRect(x: 700, y: 200, width: 200, height: 260)) }
+        let word = screen { $0.fill(CGRect(x: 700, y: 300, width: 90, height: 14)) }
+        precondition(ScreenNoteImage.looksSame(base, base) && ScreenNoteImage.looksSame(base, caret))
+        precondition(!ScreenNoteImage.looksSame(base, menu) && !ScreenNoteImage.looksSame(base, word))
+    }
+
+    static func numberedLines() {
+        var note = ScreenNote(id: UUID(), directory: URL(filePath: "/unused"))
+        let context = ScreenNote.Context(id: UUID(), elapsed: 0, appName: "Safari", displayID: 1, displayName: "Left")
+        note.contexts = [context]
+        precondition(note.append(.init(file: URL(filePath: "/unused/Shot 01.png"), elapsed: 0, byteCount: 10,
+                                       kind: .start, contextID: context.id)))
+        note.addMark(at: 2, byteCount: 20)
+        note.addMark(at: 6, byteCount: 30)
+        precondition(note.shots.count == 1 && note.shots[0].kind == .marked && note.shots[0].byteCount == 30)
+        note.speech = [TranscriptSpan(text: "This logo.", start: 2.5, end: 3),
+                       TranscriptSpan(text: "And this button.", start: 6.2, end: 7)]
+        note.transcript = "This logo. And this button."
+        precondition(note.text.contains("[1] This logo. [2] And this button."))
+        precondition(note.text.contains("marked · lines 1–2"))
     }
 
     static func compositing() throws {

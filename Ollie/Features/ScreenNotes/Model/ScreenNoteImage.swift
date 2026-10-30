@@ -23,8 +23,53 @@ enum ScreenNoteImage {
             context.addPath(stroke.path)
             context.strokePath()
         }
+        if strokes.count > 1 {
+            for (index, stroke) in strokes.enumerated() {
+                guard let start = stroke.points.first else { continue }
+                badge(index + 1, at: start, in: context)
+            }
+        }
         guard let result = context.makeImage() else { throw Failure.rendering }
         return try encode(result)
+    }
+
+    static func looksSame(_ first: CGImage, _ second: CGImage) -> Bool {
+        guard first.width == second.width, first.height == second.height,
+              let a = thumbnail(first), let b = thumbnail(second) else { return false }
+        return zip(a, b).filter { abs(Int($0) - Int($1)) > 32 }.count <= 3
+    }
+
+    private static func thumbnail(_ image: CGImage) -> [UInt8]? {
+        let width = 128
+        let height = max(1, Int((Double(width) * Double(image.height) / Double(image.width)).rounded()))
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue),
+              let data = context.data
+        else { return nil }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return Array(UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self), count: width * height))
+    }
+
+    private static func badge(_ number: Int, at point: CGPoint, in context: CGContext) {
+        let radius: CGFloat = 10
+        let circle = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
+        context.setFillColor(ScreenInk.color)
+        context.fillEllipse(in: circle)
+        context.setStrokeColor(CGColor(gray: 1, alpha: 1))
+        context.setLineWidth(1.5)
+        context.strokeEllipse(in: circle)
+        let font = CTFontCreateUIFontForLanguage(.emphasizedSystem, 12, nil)
+            ?? CTFontCreateWithName("Helvetica-Bold" as CFString, 12, nil)
+        let attributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 1, alpha: 1)
+        ]
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: "\(number)", attributes: attributes))
+        let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        context.textPosition = CGPoint(x: point.x - bounds.midX, y: point.y - bounds.midY)
+        CTLineDraw(line, context)
     }
 
     static func caption(_ image: CGImage, text: String, font: CTFont) throws -> Data {

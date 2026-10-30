@@ -32,6 +32,9 @@ the widget turns red while drawing. Releasing Shift saves one annotated screensh
 Pressing Shift without moving 4 pt, with another modifier, or while a mouse button is down, draws nothing, so typing capitals
 and Shift-click selections are unaffected. There are no tools, ink settings or Snap button.
 Screenshots use a background requested when the line starts, with the stroke composited on release.
+A line on a screen that still looks like the latest screenshot of the same context is added to that
+image instead: its lines get numbered badges and the narration gets matching `[n]` markers.
+`ScreenNoteImage.looksSame` ignores a few changed thumbnail cells, so a blinking caret still matches.
 Pending backgrounds and output stay bound to that stroke, even when a later capture completes first.
 
 Use apps normally between lines. App and Space changes record a new narration context immediately,

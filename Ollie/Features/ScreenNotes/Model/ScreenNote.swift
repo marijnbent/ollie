@@ -15,9 +15,10 @@ struct ScreenNote: Sendable {
     struct Shot: Sendable {
         let file: URL
         let elapsed: TimeInterval
-        let byteCount: Int
-        let kind: Kind
+        var byteCount: Int
+        var kind: Kind
         let contextID: UUID
+        var marks: [TimeInterval] = []
     }
 
     private struct Narration {
@@ -49,6 +50,13 @@ struct ScreenNote: Sendable {
         return true
     }
 
+    mutating func addMark(at elapsed: TimeInterval, byteCount: Int) {
+        guard !shots.isEmpty else { return }
+        shots[shots.count - 1].marks.append(elapsed)
+        shots[shots.count - 1].byteCount = byteCount
+        shots[shots.count - 1].kind = .marked
+    }
+
     static func displayID(for window: CGRect, displays: [(id: UInt32, frame: CGRect)]) -> UInt32? {
         let areas = displays.map { display in
             let intersection = display.frame.intersection(window)
@@ -70,8 +78,9 @@ struct ScreenNote: Sendable {
         }.joined(separator: "\n\n")
         let frames = shots.enumerated().compactMap { index, shot -> String? in
             guard let context = contexts.first(where: { $0.id == shot.contextID }) else { return nil }
+            let lines = shot.marks.count > 1 ? " · lines 1–\(shot.marks.count)" : ""
             return "\(index + 1). \(shot.file.lastPathComponent) — \(Self.time(shot.elapsed))"
-                + " · \(context.appName) · \(context.displayName) · \(shot.kind.rawValue)"
+                + " · \(context.appName) · \(context.displayName) · \(shot.kind.rawValue)\(lines)"
         }.joined(separator: "\n")
         let speech = narration.isEmpty && !transcript.isEmpty ? "Speech timing unavailable." : narration
         return "# Screen note\n\n## Narration by screen\n\n\(speech)\n\n## Full transcript\n\n\(transcript)"
@@ -102,6 +111,10 @@ struct ScreenNote: Sendable {
     private var narration: [Narration] {
         var seen: Set<TranscriptSpan> = []
         var groups: [Narration] = []
+        let labels = shots.filter { $0.marks.count > 1 }
+            .flatMap { $0.marks.enumerated().map { (time: $0.element, label: "[\($0.offset + 1)]") } }
+            .sorted { $0.time < $1.time }
+        var nextLabel = 0
         for span in speech.filter(\.isValid).sorted(by: { $0.start < $1.start }) where seen.insert(span).inserted {
             let selected = contexts.enumerated().filter { index, context in
                 let end = index + 1 < contexts.count ? contexts[index + 1].elapsed : .infinity
@@ -114,7 +127,12 @@ struct ScreenNote: Sendable {
                     abs($0.elapsed - midpoint) < abs($1.elapsed - midpoint)
                 }?.file
             }
-            let text = span.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            var prefix = ""
+            while nextLabel < labels.count, labels[nextLabel].time <= span.start {
+                prefix += labels[nextLabel].label + " "
+                nextLabel += 1
+            }
+            let text = prefix + span.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if groups.last?.contexts == selected && groups.last?.files == files {
                 groups[groups.count - 1].text += " " + text
                 groups[groups.count - 1].end = max(groups[groups.count - 1].end, span.end)
