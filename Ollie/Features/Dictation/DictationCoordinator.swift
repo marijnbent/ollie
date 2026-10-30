@@ -19,6 +19,8 @@ final class DictationCoordinator: HealthCheckable {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var historyLoaded = false
     @ObservationIgnored private var filePanel: NSOpenPanel?
+    @ObservationIgnored private var fileImportTask: Task<Void, Never>?
+    var isFileDropTargeted = false
     @ObservationIgnored private var fileSelectionTask: Task<Void, Never>?
     @ObservationIgnored private lazy var fileWindow = AppWindowController(
         title: "Transcribe Audio", contentSize: Theme.Size.fileTranscriptionWindow,
@@ -58,7 +60,7 @@ final class DictationCoordinator: HealthCheckable {
     private(set) var isProcessing = false
     private(set) var conflict: String?
     var isCapturingShortcut = false { didSet { apply() } }
-    var isBusy: Bool { session.recordingPhase != .idle || isProcessing || fileTranscription.isTranscribing }
+    var isBusy: Bool { session.recordingPhase != .idle || isProcessing || fileTranscription.isBusy }
 
     init(core: AppCore, ticker: HealthTicker) {
         self.core = core
@@ -96,9 +98,16 @@ final class DictationCoordinator: HealthCheckable {
             return
         }
         prepareSettings()
-        fileWindow.show(chrome: FileTranscriptionWindowChrome()) {
-            FileTranscriptionView().environment(self)
-        }
+        fileWindow.show(chrome: FileTranscriptionWindowChrome(), contentViewController: {
+            let controller = NSViewController()
+            controller.view = FileTranscriptionHostingView(
+                rootView: FileTranscriptionView().environment(self),
+                canImport: { [weak self] in self?.canImportTranscriptionFile == true },
+                receive: { [weak self] in self?.receiveTranscriptionFile(from: $0) == true },
+                targeted: { [weak self] in self?.isFileDropTargeted = $0 }
+            )
+            return controller
+        })
     }
 
     func closeFileTranscriptionIfKey() -> Bool {
@@ -112,7 +121,7 @@ final class DictationCoordinator: HealthCheckable {
     }
 
     func chooseTranscriptionFile() {
-        guard core.settings.dictationEnabled, filePanel == nil, !fileTranscription.isTranscribing else { return }
+        guard core.settings.dictationEnabled, filePanel == nil, !fileTranscription.isBusy else { return }
         let panel = NSOpenPanel()
         filePanel = panel
         defer { filePanel = nil }
@@ -126,7 +135,7 @@ final class DictationCoordinator: HealthCheckable {
     }
 
     func stageTranscriptionFile(_ url: URL) {
-        guard core.settings.dictationEnabled, !fileTranscription.isTranscribing else { return }
+        guard core.settings.dictationEnabled, !fileTranscription.isBusy else { return }
         do {
             try TranscriptionAudioFile.validate(url)
             fileSelectionTask?.cancel()
@@ -136,25 +145,66 @@ final class DictationCoordinator: HealthCheckable {
         }
     }
 
+    var canImportTranscriptionFile: Bool {
+        core.settings.dictationEnabled && !fileTranscription.isBusy
+    }
+
+    @discardableResult
+    func receiveTranscriptionFile(from pasteboard: NSPasteboard) -> Bool {
+        guard canImportTranscriptionFile else { return false }
+        guard let source = TranscriptionFileImport.read(pasteboard) else {
+            fileTranscription.reportError("Clipboard has no audio file.")
+            return false
+        }
+        guard fileTranscription.beginImport() else { return false }
+        fileSelectionTask?.cancel()
+        fileImportTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                fileImportTask = nil
+                fileTranscription.finishImport()
+            }
+            do {
+                let directory = AppPaths.applicationSupport().appendingPathComponent("Dictation/Imports", isDirectory: true)
+                let received = try await source.receive(in: directory)
+                var adopted = false
+                defer { if !adopted { received.discard() } }
+                try Task.checkCancellation()
+                guard core.settings.dictationEnabled else { throw CancellationError() }
+                try TranscriptionAudioFile.validate(received.url)
+                fileTranscription.finishImport()
+                fileTranscription.stage(received.url, ownedDirectory: received.ownedDirectory)
+                adopted = true
+            } catch {
+                guard !Task.isCancelled else { return }
+                fileTranscription.reportError(error.localizedDescription)
+            }
+        }
+        return true
+    }
+
+    func pasteTranscriptionFile() { receiveTranscriptionFile(from: .general) }
+
     func clearTranscriptionFile() {
         fileSelectionTask?.cancel()
         fileTranscription.clear()
     }
 
     func setFileTranscriptionLanguage(_ language: DeepgramLanguage) {
-        guard !fileTranscription.isTranscribing else { return }
+        guard !fileTranscription.isBusy else { return }
         fileTranscription.language = settings.transcriptionProvider.normalizedLanguage(language)
     }
 
     func copyFileTranscript(_ text: String) { historyControls.copy(text) }
 
     func cancelFileTranscription() {
+        fileImportTask?.cancel()
         fileSelectionTask?.cancel()
         fileTranscription.cancel()
     }
 
     func transcribeStagedFile() {
-        guard core.settings.dictationEnabled, fileSelectionTask == nil, !fileTranscription.isTranscribing,
+        guard core.settings.dictationEnabled, fileSelectionTask == nil, !fileTranscription.isBusy,
               let file = fileTranscription.stagedFile else { return }
         prepareSettings()
         fileSelectionTask = Task { [weak self] in
@@ -247,7 +297,7 @@ final class DictationCoordinator: HealthCheckable {
 
     func cancelRecording() {
         runtime.cancelFromEsc()
-        fileTranscription.cancel()
+        cancelFileTranscription()
     }
 
     func beginHandOff(_ delivery: TranscriptHandOff) -> TranscriptHandOff.Start {
@@ -265,8 +315,10 @@ final class DictationCoordinator: HealthCheckable {
 
     func stop() {
         filePanel?.cancel(nil)
+        isFileDropTargeted = false
+        fileImportTask?.cancel()
         fileSelectionTask?.cancel()
-        fileTranscription.cancel()
+        fileTranscription.stop()
         fileWindow.close()
         generation += 1
         loadTask?.cancel()
@@ -280,6 +332,7 @@ final class DictationCoordinator: HealthCheckable {
 
     func prepareForTermination() async -> Bool {
         stop()
+        await fileImportTask?.value
         await fileSelectionTask?.value
         await fileTranscription.finish()
         await loadTask?.value
