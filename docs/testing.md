@@ -698,7 +698,8 @@ native text editor; they do not prove browser delivery.
 The `ollie-*-test` harnesses exercise imported services, clipboard storage, serialized AX work,
 recording cancellation and reconnect, and verified paste restoration with synthetic files and fake
 providers. Dictation also covers audio-only QuickTime import, embedded-text exclusion, batch Scribe
-requests, converted WAV compatibility, import cancellation and results with History off.
+requests, converted WAV compatibility, local audio validation, explicit start after staging,
+replacement guards during a job, import cancellation and results with History off.
 Settings history tests cover feature visibility, filtered search and disabled-pane routing.
 No live transcription API key is needed.
 

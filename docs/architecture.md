@@ -143,8 +143,11 @@ Extension menu extras remain owned by `ExtensionManager`.
   `NSSplitViewController` with a collapsible sidebar of saved chats beside the open conversation, as
   Settings is built. The conversation lives on `AppCore.aiChats`, not the window, so closing it cancels
   nothing. Quick AI is the same feature's palette screen. See [features/ai.md](features/ai.md).
+- **File transcription** — a titled, resizable `AppWindowController` owned by `DictationCoordinator`.
+  Files are staged through drag and drop or an explicit picker before transcription starts. The
+  controller retains the file, per-file language, job and result across closing and reopening.
 - **The main menu** — shaped by `OllieApp`'s `.commands`, which rebinds ⌘Q to Close Window: the AI
-  Chat window when it is key, otherwise Settings. It is only ever on screen while a titled window is
+  Chat or file transcription window when it is key, otherwise Settings. It is on screen while a titled window is
   open, so it is those windows' menu bar. It must stay declarative.
 - **Dialogs** — borderless `DialogPanel`s driven by `DialogController`, the app's only presenter for
   confirmations, failure reports and value prompts. Presentation is `async`, so nothing blocks the main

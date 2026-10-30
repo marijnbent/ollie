@@ -17,6 +17,17 @@ enum FileTranscriptionTests {
         let output = directory.appendingPathComponent("transcription.wav")
         try writeTone(to: wav)
         try await makeQuickTimeAudio(source: wav, destination: qta)
+        try TranscriptionAudioFile.validate(wav)
+        try TranscriptionAudioFile.validate(qta)
+        let textFile = directory.appendingPathComponent("transcript.txt")
+        try Data("This is text, not audio".utf8).write(to: textFile)
+        for invalid in [textFile, directory, URL(string: "https://example.com/audio.wav")!] {
+            do {
+                try TranscriptionAudioFile.validate(invalid)
+                testFailure("Only local audio files can be staged")
+            } catch AudioFileError.notAudio {
+            }
+        }
         let original = try Data(contentsOf: qta)
         assertTrue(original.range(of: Data("BUILT_IN_TRANSCRIPT".utf8)) != nil)
         try await TranscriptionAudioFile.prepare(source: qta, destination: output)
@@ -92,15 +103,22 @@ enum FileTranscriptionTests {
         let settings = TranscriptionProviderSettings(provider: .elevenLabs, apiKey: "test-key")
         let source = URL(fileURLWithPath: "/test/memo.qta")
         let session = DictationSessionState()
-        let controller = FileTranscriptionController(session: session) { file, configured, language in
+        let controller = FileTranscriptionController(session: session, language: .dutch) { file, configured, language in
             assertEqual(file, source)
             assertEqual(configured.provider, .elevenLabs)
             assertEqual(language, .dutch)
             return " Fresh transcript. "
         }
-        controller.start(fileURL: source, settings: settings, language: .dutch, historyLimit: { .hundred })
-        controller.start(fileURL: source.appendingPathExtension("duplicate"), settings: settings,
-                         language: .automatic, historyLimit: { .hundred })
+        controller.stage(source)
+        assertFalse(controller.isTranscribing)
+        assertNil(controller.result)
+        assertTrue(session.transcriptHistory.isEmpty)
+        controller.start(settings: settings, historyLimit: { .hundred })
+        assertEqual(controller.activeProvider, .elevenLabs)
+        controller.stage(source.appendingPathExtension("duplicate"))
+        controller.clear()
+        assertEqual(controller.stagedFile, source)
+        controller.start(settings: settings, historyLimit: { .hundred })
         await controller.finish()
         assertEqual(session.transcriptHistory.first?.text, "Fresh transcript.")
         assertEqual(session.transcriptHistory.first?.sourceFileName, "memo.qta")
@@ -113,8 +131,14 @@ enum FileTranscriptionTests {
         }
         assertNil(session.transcriptHistory.first?.rawRecordingFileURL)
         assertFalse(controller.isTranscribing)
+        assertNil(controller.activeProvider)
+        controller.clear()
+        assertNil(controller.stagedFile)
+        assertNil(controller.result)
+        assertEqual(session.transcriptHistory.count, 1)
+        controller.stage(source)
         var limit = DictationHistoryLimit.hundred
-        controller.start(fileURL: source, settings: settings, language: .dutch, historyLimit: { limit })
+        controller.start(settings: settings, historyLimit: { limit })
         limit = .none
         await controller.finish()
         assertEqual(controller.result?.text, "Fresh transcript.")
@@ -124,25 +148,30 @@ enum FileTranscriptionTests {
             try await Task.sleep(for: .seconds(30))
             return "Must not be saved"
         }
-        cancelled.start(fileURL: source, settings: settings, language: .automatic, historyLimit: { .hundred })
+        cancelled.stage(source)
+        cancelled.start(settings: settings, historyLimit: { .hundred })
         cancelled.cancel()
         await cancelled.finish()
         assertNil(cancelled.result)
         assertNil(cancelled.error)
+        assertEqual(cancelled.stagedFile, source)
         assertEqual(session.transcriptHistory.count, 1)
 
         let empty = FileTranscriptionController(session: session) { _, _, _ in " " }
-        empty.start(fileURL: source, settings: settings, language: .automatic, historyLimit: { .hundred })
+        empty.stage(source)
+        empty.start(settings: settings, historyLimit: { .hundred })
         await empty.finish()
         assertTrue(empty.error != nil)
         assertEqual(session.transcriptHistory.count, 1)
+        empty.stage(source)
+        assertNil(empty.error)
         let missing = FileTranscriptionController(session: session) { _, _, _ in
-            preconditionFailure("Missing credentials must not call the provider")
+            preconditionFailure("No staged file or credentials must not call the provider")
         }
-        missing.start(
-            fileURL: source, settings: .init(provider: .elevenLabs, apiKey: ""),
-            language: .automatic, historyLimit: { .hundred }
-        )
+        missing.start(settings: settings, historyLimit: { .hundred })
+        assertFalse(missing.isTranscribing)
+        missing.stage(source)
+        missing.start(settings: .init(provider: .elevenLabs, apiKey: ""), historyLimit: { .hundred })
         assertFalse(missing.isTranscribing)
         assertTrue(missing.error != nil)
     }

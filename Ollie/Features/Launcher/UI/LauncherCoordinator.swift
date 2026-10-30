@@ -184,7 +184,7 @@ final class LauncherCoordinator {
             core.screenNotes.toggle()
         case .transcribeAudioFile:
             dismissPalette()
-            core.dictation.chooseTranscriptionFile()
+            core.dictation.showFileTranscription()
         case .openCamera:
             dismissPalette()
             Task { await core.cameraCoordinator.show() }
