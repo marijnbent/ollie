@@ -12,7 +12,7 @@
   app. Overlays are always click-through and cover all connected displays.
 - Cancelling, disabling either required feature, display changes, sleep and session deactivation cancel
   pending work and leave the clipboard unchanged. Asynchronous work is bound to its session ID.
-- Capture is bounded to ten screenshots and 32 MB of PNG data, with a 2560-pixel edge limit.
+- Capture is bounded to 20 screenshots and 64 MB of PNG data, with a 2560-pixel edge limit.
   Automatic context shots reserve three slots; markers reserve the final slot. Pen strokes are
   bounded to 4096 points. Queued captures count toward admission limits.
 - Off means no capture, display links, panels, tasks or observers. Published clipboard files remain

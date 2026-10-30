@@ -28,8 +28,8 @@ struct ScreenNote: Sendable {
         var text: String
     }
 
-    static let maximumShots = 10
-    static let maximumBytes = 32 * 1024 * 1024
+    static let maximumShots = 20
+    static let maximumBytes = 64 * 1024 * 1024
     let id: UUID
     let directory: URL
     var contexts: [Context] = []
