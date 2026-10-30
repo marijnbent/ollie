@@ -761,7 +761,6 @@
 		D4F581E3CDF04379D895919C /* AppAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77DF599C6BD945C4AA571CFF /* AppAppearance.swift */; };
 		D50E7C6B273FB61304A3CCD6 /* MarkdownTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EEE2A7863EDE93E2A8F5F7 /* MarkdownTableView.swift */; };
 		D55C22BDBB1760DF7BD02F7F /* CameraAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F8D8F703048E8C53ED42BC /* CameraAccess.swift */; };
-		D564C5493B362CE54EFAFE3E /* ScreenMarkerMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3745BE4CD8B575BB24197D77 /* ScreenMarkerMonitor.swift */; };
 		D591CBDD34D16952A389ED07 /* NotificationsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A66D4A5051F16D0481EEEB /* NotificationsCoordinator.swift */; };
 		D5B8BF26FC4671E293FC7BE1 /* SettingsBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D0E35CAC10490750A9BB92 /* SettingsBackup.swift */; };
 		D5CDFDC31F6830937FFBECA7 /* AIModelDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D4B9934A06C6609752F34A /* AIModelDiscovery.swift */; };
@@ -1075,7 +1074,6 @@
 		3635989FB82A6B04551C0B97 /* SpacesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesSettingsView.swift; sourceTree = "<group>"; };
 		3692B3D8AFF7F6A5162FB5C4 /* DictionaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryService.swift; sourceTree = "<group>"; };
 		3734D5B98E15CFAB508DFCDE /* WindowManagementFileFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManagementFileFormat.swift; sourceTree = "<group>"; };
-		3745BE4CD8B575BB24197D77 /* ScreenMarkerMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMarkerMonitor.swift; sourceTree = "<group>"; };
 		37578A78F4EFD522189E572F /* ExtensionRefreshPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRefreshPolicy.swift; sourceTree = "<group>"; };
 		3867681FC2E298F21B2FD9FC /* SupportWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportWindowView.swift; sourceTree = "<group>"; };
 		38BF07AC7CA95AE28AE98521 /* FFmpegService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFmpegService.swift; sourceTree = "<group>"; };
@@ -2924,7 +2922,6 @@
 		80BE3F4CF02FD560BABF7EF4 /* Service */ = {
 			isa = PBXGroup;
 			children = (
-				3745BE4CD8B575BB24197D77 /* ScreenMarkerMonitor.swift */,
 				8217F7D74A28E0F6F195B47B /* ScreenNoteCapture.swift */,
 				D9C48365168222FF607D7806 /* ScreenNoteClipboard.swift */,
 			);
@@ -4718,7 +4715,6 @@
 				A849443AC097B63068A73CB9 /* ScheduleView.swift in Sources */,
 				4896DF8EF063C8C7D01B4F38 /* ScreenInk.swift in Sources */,
 				9D4D9974CCBBEC80A523633A /* ScreenInkView.swift in Sources */,
-				D564C5493B362CE54EFAFE3E /* ScreenMarkerMonitor.swift in Sources */,
 				EF0E3437E680940852710806 /* ScreenNote.swift in Sources */,
 				68A39C4CA3360D372F62CBB1 /* ScreenNoteCapture.swift in Sources */,
 				19F36FD1BF2A78E2C98BC5DC /* ScreenNoteClipboard.swift in Sources */,
@@ -4949,7 +4945,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = X44F5HTS6P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -5036,7 +5032,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEPLOYMENT_POSTPROCESSING = YES;

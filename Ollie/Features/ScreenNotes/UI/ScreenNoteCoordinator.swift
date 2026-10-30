@@ -10,19 +10,16 @@ final class ScreenNoteCoordinator {
     private var settings: AppSettings { core.settings }
     private(set) var phase = Phase.idle
     private(set) var shotCount = 0
-    @ObservationIgnored private var marking = false
-    @ObservationIgnored private var ink = ScreenInk()
     @ObservationIgnored private var note: ScreenNote?
     @ObservationIgnored private var panels: [ScreenNotePanel] = []
     @ObservationIgnored private var toolbar: ScreenNotePanel?
     @ObservationIgnored private var canvases: [UInt32: ScreenInkView] = [:]
     @ObservationIgnored private var observations: [NotificationToken] = []
-    @ObservationIgnored private let markerMonitor = ScreenMarkerMonitor()
     @ObservationIgnored private var captureTask: Task<Void, Never>?
     @ObservationIgnored private var frames: [UUID: Task<ScreenNoteCapture.Frame, Error>] = [:]
-    @ObservationIgnored private var activeFrame: UUID?
-    @ObservationIgnored private var activeContext: ScreenNote.Context?
     @ObservationIgnored private var pendingCaptures = 0
+    @ObservationIgnored private var pointerDisplay: UInt32?
+    @ObservationIgnored private var pointerArrival: TimeInterval?
     @ObservationIgnored private var contextTask: Task<Void, Never>?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
     @ObservationIgnored private var cleanupTask: Task<Void, Never>?
@@ -48,10 +45,6 @@ final class ScreenNoteCoordinator {
               let screen = NSScreen.underCursor, let displayID = Self.displayID(screen) else { return }
         if let issue = core.dictation.handOffUnavailableReason() {
             core.showMessage(issue, tone: .neutral)
-            return
-        }
-        guard Permissions.isAccessibilityTrusted() else {
-            core.showMessage("Allow Accessibility for Ollie in System Settings to use screen markers.", tone: .neutral)
             return
         }
         guard CGPreflightScreenCaptureAccess() else {
@@ -81,14 +74,6 @@ final class ScreenNoteCoordinator {
             guard note?.id == id else { return }
             showPanels(toolbarScreen: screen)
             _ = selectContext(displayID: displayID)
-            markerMonitor.start(onChange: { [weak self] option in self?.setMarking(option) },
-                                onClick: { [weak self] point in
-                let screen = NSScreen.screens.first { screen in
-                    Self.displayID(screen).map { CGDisplayBounds($0).contains(point) } == true
-                }
-                guard let id = screen.flatMap(Self.displayID) else { return }
-                self?.contextChanged(displayID: id)
-            })
             observe(NSApplication.didChangeScreenParametersNotification, center: .default, context: false)
             observe(NSWorkspace.willSleepNotification, center: NSWorkspace.shared.notificationCenter, context: false)
             observe(NSWorkspace.sessionDidResignActiveNotification, center: NSWorkspace.shared.notificationCenter, context: false)
@@ -101,39 +86,17 @@ final class ScreenNoteCoordinator {
         }
     }
 
-    private func setMarking(_ enabled: Bool) {
-        guard phase == .recording, ink.active == nil else { return }
-        let available = note?.canCapture(.marked, pending: pendingCaptures) == true
-        if enabled && !available { showLimit() }
-        let enabled = enabled && available
-        guard enabled != marking else { return }
-        marking = enabled
-        for panel in panels { panel.ignoresMouseEvents = !enabled }
-        for canvas in canvases.values { canvas.setMarking(enabled) }
-    }
-
-    func begin(at point: CGPoint, displayID: UInt32) {
-        guard phase == .recording, note?.canCapture(.marked, pending: pendingCaptures) == true else { return }
-        guard let context = selectContext(displayID: displayID) else { return }
-        activeContext = context
-        ink.begin(at: point, displayID: displayID)
-        activeFrame = startFrame(context: context)
-        canvases[displayID]?.begin(point)
-    }
-
-    func append(_ point: CGPoint) {
-        let count = ink.active?.points.count
-        ink.append(point)
-        if let stroke = ink.active, stroke.points.count != count { canvases[stroke.displayID]?.append(point) }
-    }
-
-    func finishMark() {
-        guard let stroke = ink.finish(), let frame = activeFrame, let context = activeContext else { return }
-        activeFrame = nil
-        activeContext = nil
-        canvases[stroke.displayID]?.fade()
-        enqueue(.marked, context: context, stroke: stroke, frameID: frame)
-        setMarking(NSEvent.modifierFlags.contains(.option))
+    func samplePointer(_ point: CGPoint, displayID: UInt32) {
+        guard phase == .recording else { return }
+        let elapsed = CACurrentMediaTime() - startedAt
+        note?.pointer.record(point, displayID: displayID, elapsed: elapsed)
+        if pointerDisplay != displayID {
+            pointerDisplay = displayID
+            pointerArrival = elapsed
+        } else if let arrival = pointerArrival, elapsed - arrival >= 0.5 {
+            pointerArrival = nil
+            if note?.contexts.last?.displayID != displayID { contextChanged(displayID: displayID) }
+        }
     }
 
     private func startFrame(context: ScreenNote.Context) -> UUID {
@@ -146,11 +109,11 @@ final class ScreenNoteCoordinator {
     }
 
     private func enqueue(_ kind: ScreenNote.Kind, context: ScreenNote.Context? = nil,
-                         stroke: ScreenInk.Stroke? = nil, frameID: UUID? = nil) {
+                         frameID: UUID? = nil) {
         guard let note, let context = context ?? note.contexts.last else { return }
         guard note.canCapture(kind, pending: pendingCaptures) else {
             if let frameID { frames.removeValue(forKey: frameID)?.cancel() }
-            if kind == .marked { showLimit() }
+            showLimit()
             return
         }
         let frameID = frameID ?? startFrame(context: context)
@@ -168,11 +131,12 @@ final class ScreenNoteCoordinator {
                 guard self.note?.id == id, let current = self.note else { return }
                 let file = current.directory.appendingPathComponent(String(format: "Shot %02d.png", current.shots.count + 1))
                 let result = try await Task.detached(priority: .userInitiated) {
-                    try ScreenNoteCapture.save(image, strokes: stroke.map { [$0] } ?? [], file: file)
+                    try ScreenNoteCapture.save(image, file: file)
                 }.value
                 try Task.checkCancellation()
                 guard self.note?.id == id else { return }
-                if kind != .marked, fingerprints[image.displayID] == result.fingerprint {
+                self.note?.displaySizes[image.displayID] = image.pointSize
+                if fingerprints[image.displayID] == result.fingerprint {
                     try FileManager.default.removeItem(at: file)
                 } else if self.note?.append(.init(file: file, elapsed: elapsed, byteCount: result.byteCount,
                                                  kind: kind, contextID: context.id)) == true {
@@ -211,7 +175,6 @@ final class ScreenNoteCoordinator {
         guard let proposed = ScreenNoteCapture.context(elapsed: elapsed, displayID: displayID) else { return nil }
         if !force, let current = note?.contexts.last,
            current.appName == proposed.appName, current.displayID == proposed.displayID { return current }
-        finishMark()
         note?.contexts.append(proposed)
         return proposed
     }
@@ -220,12 +183,11 @@ final class ScreenNoteCoordinator {
         guard phase == .recording else { return }
         let previous = note?.contexts.last?.id
         guard let context = selectContext(displayID: displayID, force: force), context.id != previous else { return }
-        setMarking(false)
         contextTask?.cancel()
         let id = note?.id
         contextTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
-            guard let self, self.note?.id == id, self.phase == .recording, self.ink.active == nil,
+            guard let self, self.note?.id == id, self.phase == .recording,
                   self.note?.contexts.last?.id == context.id else { return }
             self.enqueue(.switched, context: context)
         }
@@ -233,10 +195,8 @@ final class ScreenNoteCoordinator {
 
     func finishNote() {
         guard phase == .recording, let id = note?.id else { return }
-        finishMark()
-        setMarking(false)
         phase = .finishing
-        markerMonitor.stop()
+        for canvas in canvases.values { canvas.stop() }
         contextTask?.cancel()
         toolbar?.orderOut(nil)
         core.showProgress("Transcribing…", onCancel: { [weak self] in self?.stop() })
@@ -300,13 +260,11 @@ final class ScreenNoteCoordinator {
         exportTask?.cancel()
         contextTask?.cancel()
         for frame in pendingFrames { frame.cancel() }
-        markerMonitor.stop()
+        for canvas in canvases.values { canvas.stop() }
         captureTask = nil
         exportTask = nil
         contextTask = nil
         frames.removeAll()
-        activeFrame = nil
-        activeContext = nil
         pendingCaptures = 0
         observations.removeAll()
         for panel in panels { panel.orderOut(nil); panel.contentView = nil }
@@ -315,8 +273,8 @@ final class ScreenNoteCoordinator {
         toolbar = nil
         panels.removeAll()
         canvases.removeAll()
-        ink = ScreenInk()
-        marking = false
+        pointerDisplay = nil
+        pointerArrival = nil
         if hadProgress { core.hideProgress() }
         if let directory, directory != publishedDirectory {
             let previous = cleanupTask

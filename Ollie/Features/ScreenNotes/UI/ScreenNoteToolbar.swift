@@ -30,7 +30,7 @@ struct ScreenNoteToolbar: View {
                 appear = true
             }
         }
-        .help("Hold ⌥ and drag to mark; use the shortcut again to finish")
+        .help("Use the shortcut again to finish")
     }
 
     private func button(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {

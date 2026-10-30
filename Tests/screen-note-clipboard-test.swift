@@ -26,7 +26,7 @@ struct ScreenNoteClipboardTests {
             let bytes = try ScreenNoteImage.render(bitmap.makeImage()!, pointSize: CGSize(width: 1280, height: 720), strokes: [])
             try bytes.write(to: file)
             precondition(note.append(.init(file: file, elapsed: Double(index * 5), byteCount: bytes.count,
-                                          kind: index == 0 ? .start : .marked, contextID: context.id)))
+                                          kind: index == 0 ? .start : .switched, contextID: context.id)))
         }
         let payload = try await Task.detached { [note] in try ScreenNoteClipboard.prepare(note) }.value
         let pasteboard = NSPasteboard.withUniqueName()

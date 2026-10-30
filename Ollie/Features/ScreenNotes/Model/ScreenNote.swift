@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 struct ScreenNote: Sendable {
-    enum Kind: String, Sendable { case start, marked, switched, final }
+    enum Kind: String, Sendable { case start, switched, final }
 
     struct Context: Identifiable, Sendable {
         let id: UUID
@@ -34,11 +34,13 @@ struct ScreenNote: Sendable {
     let directory: URL
     var contexts: [Context] = []
     var shots: [Shot] = []
+    var pointer = ScreenInk()
+    var displaySizes: [UInt32: CGSize] = [:]
     var transcript = ""
     var speech: [TranscriptSpan] = []
 
     func canCapture(_ kind: Kind, pending: Int = 0) -> Bool {
-        let reserved = kind == .switched ? 3 : kind == .marked ? 1 : 0
+        let reserved = kind == .switched ? 1 : 0
         return shots.count + pending < Self.maximumShots - reserved
     }
 
@@ -78,6 +80,18 @@ struct ScreenNote: Sendable {
             + "\n\n## Screenshots\n\n\(frames)\n"
     }
 
+    func pointerStrokes(for shot: Shot) -> [ScreenInk.Stroke] {
+        guard let index = contexts.firstIndex(where: { $0.id == shot.contextID }) else { return [] }
+        let context = contexts[index]
+        let contextEnd = index + 1 < contexts.count ? contexts[index + 1].elapsed : .infinity
+        let ranges = linkedSpans.filter { $0.files.contains(shot.file) }.compactMap { link -> ClosedRange<TimeInterval>? in
+            let start = max(link.span.start, context.elapsed)
+            let end = min(link.span.end, contextEnd)
+            return start < end ? start...end : nil
+        }
+        return pointer.strokes(displayID: context.displayID, ranges: ranges)
+    }
+
     func caption(for shot: Shot) -> String {
         guard let context = contexts.first(where: { $0.id == shot.contextID }) else { return "" }
         let groups = narration
@@ -99,10 +113,10 @@ struct ScreenNote: Sendable {
             .lowercased()
     }
 
-    private var narration: [Narration] {
+    private var linkedSpans: [(span: TranscriptSpan, contexts: [UUID], files: [URL])] {
         var seen: Set<TranscriptSpan> = []
-        var groups: [Narration] = []
-        for span in speech.filter(\.isValid).sorted(by: { $0.start < $1.start }) where seen.insert(span).inserted {
+        return speech.filter(\.isValid).sorted(by: { $0.start < $1.start }).compactMap { span in
+            guard seen.insert(span).inserted else { return nil }
             let selected = contexts.enumerated().filter { index, context in
                 let end = index + 1 < contexts.count ? contexts[index + 1].elapsed : .infinity
                 return context.elapsed <= span.start && span.start < end
@@ -114,6 +128,13 @@ struct ScreenNote: Sendable {
                     abs($0.elapsed - midpoint) < abs($1.elapsed - midpoint)
                 }?.file
             }
+            return (span, selected, files)
+        }
+    }
+
+    private var narration: [Narration] {
+        var groups: [Narration] = []
+        for (span, selected, files) in linkedSpans {
             let text = span.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if groups.last?.contexts == selected && groups.last?.files == files {
                 groups[groups.count - 1].text += " " + text

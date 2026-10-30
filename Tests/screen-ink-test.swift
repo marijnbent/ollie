@@ -16,17 +16,18 @@ struct ScreenInkTests {
         precondition(ScreenNote.displayID(for: CGRect(x: -20, y: 10, width: 90, height: 50), displays: displays) == 1)
         precondition(ScreenNote.displayID(for: CGRect(x: 200, y: 0, width: 50, height: 50), displays: displays) == nil)
         var ink = ScreenInk()
-        ink.begin(at: .zero, displayID: 2)
-        ink.append(CGPoint(x: 0.1, y: 0.1))
-        precondition(ink.active?.points.count == 1)
-        for index in 1..<(ScreenInk.maximumPoints * 2) { ink.append(CGPoint(x: index, y: 0)) }
-        precondition(ink.active?.points.count == ScreenInk.maximumPoints)
-        let stroke = ink.finish()!
-        precondition(stroke.displayID == 2 && ink.active == nil && ink.finish() == nil)
-        precondition(stroke.path.boundingBoxOfPath.width == CGFloat(ScreenInk.maximumPoints - 1))
-        ink.begin(at: .zero, displayID: 1)
-        precondition(ink.active!.path.boundingBoxOfPath.width > 0)
-        print("Screen marker geometry, storage bounds and reserved capture slots passed")
+        ink.record(.zero, displayID: 2, elapsed: 0)
+        ink.record(CGPoint(x: 1, y: 0), displayID: 2, elapsed: 1)
+        precondition(ink.samples.count == 1)
+        for index in 1..<(ScreenInk.maximumPoints * 2) {
+            ink.record(CGPoint(x: index * 2, y: 0), displayID: 2, elapsed: Double(index))
+        }
+        precondition(ink.samples.count <= ScreenInk.maximumPoints)
+        precondition(ink.samples.last?.elapsed == Double(ScreenInk.maximumPoints * 2 - 1))
+        precondition(ink.samples.first?.elapsed == 0)
+        precondition(ink.strokes(displayID: 1, ranges: [0...10]).isEmpty)
+        precondition(ink.strokes(displayID: 2, ranges: [0...10]).count == 1)
+        print("Pointer bounds, filtering and display selection passed")
     }
 
     static func noteLimits() {
@@ -35,14 +36,12 @@ struct ScreenInkTests {
         let context = ScreenNote.Context(id: UUID(), elapsed: 0, appName: "Test app", displayID: 1, displayName: "Test display")
         note.contexts = [context]
         let shot = ScreenNote.Shot(file: directory.appendingPathComponent("Shot 01.png"), elapsed: 65,
-                                  byteCount: 10, kind: .marked, contextID: context.id)
-        for _ in 0..<(ScreenNote.maximumShots - 3) { precondition(note.append(shot)) }
-        precondition(!note.canCapture(.switched) && note.canCapture(.marked) && note.canCapture(.final))
-        precondition(!note.canCapture(.marked, pending: 2) && note.canCapture(.final, pending: 2))
-        precondition(note.append(shot) && note.append(shot))
-        precondition(!note.canCapture(.marked) && note.canCapture(.final))
-        precondition(note.append(shot) && !note.append(shot) && !note.canCapture(.final))
-        precondition(note.text.contains("1:05 · Test app · Test display · marked"))
+                                  byteCount: 10, kind: .switched, contextID: context.id)
+        for _ in 0..<(ScreenNote.maximumShots - 1) { precondition(note.append(shot)) }
+        precondition(!note.canCapture(.switched) && note.canCapture(.final))
+        precondition(!note.canCapture(.final, pending: 1))
+        precondition(note.append(shot) && !note.append(shot))
+        precondition(note.text.contains("1:05 · Test app · Test display · switched"))
         var full = ScreenNote(id: UUID(), directory: directory)
         full.contexts = [context]
         precondition(full.append(.init(file: shot.file, elapsed: 0, byteCount: ScreenNote.maximumBytes,
@@ -58,7 +57,7 @@ struct ScreenInkTests {
         note.contexts = [first, second, returned]
         for (index, context, elapsed) in [(1, first, 0.0), (2, first, 5.0), (3, second, 10.5), (4, returned, 20.0)] {
             precondition(note.append(.init(file: note.directory.appendingPathComponent("Shot \(index).png"), elapsed: elapsed,
-                                          byteCount: 10, kind: .marked, contextID: context.id)))
+                                          byteCount: 10, kind: .switched, contextID: context.id)))
         }
         let early = TranscriptSpan(text: "Make this red.", start: 4, end: 5)
         note.speech = [TranscriptSpan(text: "Change the filter.", start: 10.1, end: 12),
@@ -70,6 +69,11 @@ struct ScreenInkTests {
         precondition(!note.caption(for: note.shots[3]).contains("Make this red."))
         precondition(note.caption(for: note.shots[3]).contains("Now make it blue."))
         precondition(note.text.components(separatedBy: "Make this red.").count == 3)
+        note.pointer.record(CGPoint(x: 10, y: 10), displayID: 1, elapsed: 4.2)
+        note.pointer.record(CGPoint(x: 20, y: 10), displayID: 1, elapsed: 4.8)
+        note.pointer.record(CGPoint(x: 30, y: 10), displayID: 1, elapsed: 7)
+        precondition(note.pointerStrokes(for: note.shots[1]).first?.points.count == 2)
+        precondition(note.pointerStrokes(for: note.shots[2]).isEmpty)
         note.speech = []
         precondition(note.caption(for: note.shots[0]).contains(note.transcript))
         precondition(note.text.contains("Speech timing unavailable."))

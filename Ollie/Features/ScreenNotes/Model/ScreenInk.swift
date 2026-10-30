@@ -17,23 +17,44 @@ struct ScreenInk: Sendable {
         }
     }
 
+    struct Sample: Sendable {
+        let point: CGPoint
+        let displayID: UInt32
+        let elapsed: TimeInterval
+    }
+
     static let maximumPoints = 4096
     static let color = CGColor(srgbRed: 1, green: 0.23, blue: 0.19, alpha: 1)
-    static let width: CGFloat = 6
-    private(set) var active: Stroke?
+    static let width: CGFloat = 3
+    private(set) var samples: [Sample] = []
 
-    mutating func begin(at point: CGPoint, displayID: UInt32) {
-        active = Stroke(displayID: displayID, points: [point])
+    mutating func record(_ point: CGPoint, displayID: UInt32, elapsed: TimeInterval) {
+        guard elapsed.isFinite, point.x.isFinite, point.y.isFinite else { return }
+        if let last = samples.last {
+            guard elapsed >= last.elapsed else { return }
+            if last.displayID == displayID,
+               hypot(point.x - last.point.x, point.y - last.point.y) < 2 { return }
+        }
+        if samples.count >= Self.maximumPoints {
+            samples = samples.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
+        }
+        samples.append(Sample(point: point, displayID: displayID, elapsed: elapsed))
     }
 
-    mutating func append(_ point: CGPoint) {
-        guard let active, let last = active.points.last, active.points.count < Self.maximumPoints,
-              hypot(point.x - last.x, point.y - last.y) >= 0.5 else { return }
-        self.active?.points.append(point)
-    }
-
-    mutating func finish() -> Stroke? {
-        defer { active = nil }
-        return active
+    func strokes(displayID: UInt32, ranges: [ClosedRange<TimeInterval>]) -> [Stroke] {
+        var result: [Stroke] = []
+        for range in ranges {
+            var points: [CGPoint] = []
+            for sample in samples {
+                if sample.displayID == displayID && range.contains(sample.elapsed) {
+                    points.append(sample.point)
+                } else if !points.isEmpty {
+                    result.append(Stroke(displayID: displayID, points: points))
+                    points = []
+                }
+            }
+            if !points.isEmpty { result.append(Stroke(displayID: displayID, points: points)) }
+        }
+        return result
     }
 }
