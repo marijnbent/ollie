@@ -102,12 +102,18 @@ Cancelled dictation deletes managed raw recordings only when no history entry ad
 cancellation during enhancement. Paste or insertion-verification failure preserves adopted recordings.
 
 The launcher’s **Transcribe Audio File** command and **Dictation → History → Transcribe File…**
-use the selected transcription provider and language with its prerecorded API. ElevenLabs uses
-`scribe_v2`, not the live model. Audio files, including Voice Memos `.qta` recordings, are decoded
+open a dedicated **Transcribe Audio** window without opening a file picker. Drop an audio file or
+use **Choose File…** (⌘O), check the per-file language and press **Transcribe** (Return).
+Choosing or dropping only stages a file; the explicit action starts the upload. The per-file language
+does not change live dictation. One file is handled at a time; new drops are refused during a job.
+The selected provider’s prerecorded API is used. ElevenLabs uses `scribe_v2`, not the live model.
+Audio files, including Voice Memos `.qta` recordings, are decoded
 locally to mono 16 kHz WAV using only audio tracks; embedded transcripts and metadata are excluded.
 The source file is never changed. Temporary audio is removed after success, failure or cancellation.
 Results appear in History with the source filename and can be selected or copied; when History is
-off, the latest result remains available in the pane without being saved. Imports do not enhance,
+off, the latest result remains available in the window without being saved. Closing the window does
+not cancel a job or clear its staged file and result; reopening restores them. Copy is the default
+action after completion. Imports do not enhance,
 paste or automatically copy the transcript, and do not retain the source audio in Ollie’s history.
 Disabling Dictation or quitting cancels imports. Quit waits for cleanup and pending history writes.
 

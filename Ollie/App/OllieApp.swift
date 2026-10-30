@@ -58,7 +58,7 @@ struct OllieApp: App {
         }
         CommandGroup(replacing: .appTermination) {
             Button("Close Window") {
-                // The chat window closes itself when it is in front; otherwise ⌘Q is Settings'.
+                guard !AppCore.shared.dictation.closeFileTranscriptionIfKey() else { return }
                 guard !AppCore.shared.aiChatCoordinator.closeWindowIfKey() else { return }
                 AppCore.shared.settingsCoordinator.closeSettings()
             }

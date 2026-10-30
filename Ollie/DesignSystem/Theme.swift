@@ -99,6 +99,10 @@ enum Theme {
         static let launcherVisibleRows = 7
         /// Opening size on a first run and the floor: below it the title bar's own parts collide.
         static let noteWindow = CGSize(width: 440, height: 180)
+        static let fileTranscriptionWindow = CGSize(width: 560, height: 440)
+        static let fileTranscriptionWindowMinimum = CGSize(width: 440, height: 320)
+        static let fileTranscriptionIcon: CGFloat = 32
+        static let fileTranscriptionLanguageWidth: CGFloat = 110
         /// The tallest a note window grows to fit its text; past it the editor scrolls.
         static let noteWindowMaxHeight: CGFloat = 860
         static let noteEditorInset: CGFloat = 16

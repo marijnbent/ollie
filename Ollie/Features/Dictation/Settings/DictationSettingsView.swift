@@ -43,12 +43,6 @@ struct DictationSettingsView: View {
             .padding(.vertical, Theme.Spacing.md)
         }
         .settingsScrollTarget(.dictation)
-        .onChange(of: dictation.historyRequest, initial: true) {
-            if dictation.historyRequest != nil {
-                pane = .history
-                dictation.consumeHistoryRequest()
-            }
-        }
         .task { dictation.prepareSettings() }
     }
 }

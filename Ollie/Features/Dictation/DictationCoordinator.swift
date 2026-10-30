@@ -1,6 +1,6 @@
 import AppKit
 import Observation
-import UniformTypeIdentifiers
+import SwiftUI
 
 @MainActor
 @Observable
@@ -20,6 +20,12 @@ final class DictationCoordinator: HealthCheckable {
     @ObservationIgnored private var historyLoaded = false
     @ObservationIgnored private var filePanel: NSOpenPanel?
     @ObservationIgnored private var fileSelectionTask: Task<Void, Never>?
+    @ObservationIgnored private lazy var fileWindow = AppWindowController(
+        title: "Transcribe Audio", contentSize: Theme.Size.fileTranscriptionWindow,
+        minimumSize: Theme.Size.fileTranscriptionWindowMinimum, resizable: true,
+        autosaveName: "FileTranscription", activation: core.activationPolicy
+    )
+
     @ObservationIgnored private lazy var windows = DictationWindowCoordinator(settings: settings, session: session) { [weak self] in
         self?.core.settingsCoordinator.showSettings(tab: .dictation)
     }
@@ -45,13 +51,12 @@ final class DictationCoordinator: HealthCheckable {
     @ObservationIgnored private(set) lazy var enhancementControls = DictationEnhancementsController(settingsStore: settings, promptRoutingService: prompts)
     @ObservationIgnored private(set) lazy var historyControls = DictationHistoryController(settingsStore: settings, sessionState: session)
     @ObservationIgnored private(set) lazy var fileTranscription = FileTranscriptionController(
-        session: session, transcriber: FileTranscriptionClient.transcribe
+        session: session, language: settings.deepgramLanguage, transcriber: FileTranscriptionClient.transcribe
     )
     @ObservationIgnored private(set) lazy var logControls = DictationLogsController(sessionState: session)
     private(set) var isRunning = false
     private(set) var isProcessing = false
     private(set) var conflict: String?
-    private(set) var historyRequest: UUID?
     var isCapturingShortcut = false { didSet { apply() } }
     var isBusy: Bool { session.recordingPhase != .idle || isProcessing || fileTranscription.isTranscribing }
 
@@ -85,39 +90,88 @@ final class DictationCoordinator: HealthCheckable {
         loadHistory()
     }
 
-    func chooseTranscriptionFile() {
-        guard core.settings.dictationEnabled, filePanel == nil, fileSelectionTask == nil,
-              !fileTranscription.isTranscribing else { return }
-        historyRequest = UUID()
-        core.settingsCoordinator.showSettings(tab: .dictation)
+    func showFileTranscription() {
+        guard core.settings.dictationEnabled else {
+            showFileTranscriptionSettings()
+            return
+        }
         prepareSettings()
+        fileWindow.show(chrome: FileTranscriptionWindowChrome()) {
+            FileTranscriptionView().environment(self)
+        }
+    }
+
+    func closeFileTranscriptionIfKey() -> Bool {
+        guard NSApp.keyWindow?.identifier == FileTranscriptionWindowChrome.identifier else { return false }
+        fileWindow.close()
+        return true
+    }
+
+    func showFileTranscriptionSettings() {
+        core.settingsCoordinator.showSettings(tab: .dictation)
+    }
+
+    func chooseTranscriptionFile() {
+        guard core.settings.dictationEnabled, filePanel == nil, !fileTranscription.isTranscribing else { return }
         let panel = NSOpenPanel()
         filePanel = panel
         defer { filePanel = nil }
-        panel.title = "Transcribe Audio File"
-        panel.prompt = "Transcribe"
-        panel.allowedContentTypes = [.audio, UTType(importedAs: "com.apple.quicktime-audio")]
+        panel.title = "Choose Audio File"
+        panel.prompt = "Choose"
+        panel.allowedContentTypes = TranscriptionAudioFile.allowedContentTypes
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, core.settings.dictationEnabled, let url = panel.url else { return }
+        stageTranscriptionFile(url)
+    }
+
+    func stageTranscriptionFile(_ url: URL) {
+        guard core.settings.dictationEnabled, !fileTranscription.isTranscribing else { return }
+        do {
+            try TranscriptionAudioFile.validate(url)
+            fileSelectionTask?.cancel()
+            fileTranscription.stage(url)
+        } catch {
+            fileTranscription.reportError(error.localizedDescription)
+        }
+    }
+
+    func clearTranscriptionFile() {
+        fileSelectionTask?.cancel()
+        fileTranscription.clear()
+    }
+
+    func setFileTranscriptionLanguage(_ language: DeepgramLanguage) {
+        guard !fileTranscription.isTranscribing else { return }
+        fileTranscription.language = settings.transcriptionProvider.normalizedLanguage(language)
+    }
+
+    func copyFileTranscript(_ text: String) { historyControls.copy(text) }
+
+    func cancelFileTranscription() {
+        fileSelectionTask?.cancel()
+        fileTranscription.cancel()
+    }
+
+    func transcribeStagedFile() {
+        guard core.settings.dictationEnabled, fileSelectionTask == nil, !fileTranscription.isTranscribing,
+              let file = fileTranscription.stagedFile else { return }
+        prepareSettings()
         fileSelectionTask = Task { [weak self] in
             guard let self else { return }
             defer { fileSelectionTask = nil }
             await loadTask?.value
-            guard !Task.isCancelled, core.settings.dictationEnabled else { return }
+            guard !Task.isCancelled, core.settings.dictationEnabled, fileTranscription.stagedFile == file else { return }
             guard historyLoaded else {
-                core.showMessage("Could not read transcript history. Reopen Dictation settings and try again.", tone: .danger)
+                fileTranscription.reportError("Could not read transcript history. Reopen Dictation settings and try again.")
                 return
             }
             fileTranscription.start(
-                fileURL: url, settings: settings.transcriptionProviderSettings,
-                language: settings.deepgramLanguage,
+                settings: settings.transcriptionProviderSettings,
                 historyLimit: { [weak self] in self?.settings.historyLimit ?? .none }
             )
         }
     }
-
-    func consumeHistoryRequest() { historyRequest = nil }
 
     private func loadHistory() {
         guard !historyLoaded, loadTask == nil else { return }
@@ -213,6 +267,7 @@ final class DictationCoordinator: HealthCheckable {
         filePanel?.cancel(nil)
         fileSelectionTask?.cancel()
         fileTranscription.cancel()
+        fileWindow.close()
         generation += 1
         loadTask?.cancel()
         transition?.cancel()

@@ -1,7 +1,21 @@
 import AVFoundation
 import Foundation
+import UniformTypeIdentifiers
 
 enum TranscriptionAudioFile {
+    static let allowedContentTypes: [UTType] = [.audio, UTType(importedAs: "com.apple.quicktime-audio")]
+
+    nonisolated static func validate(_ url: URL) throws {
+        guard url.isFileURL else { throw AudioFileError.notAudio }
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        let values = try url.resourceValues(forKeys: [.contentTypeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, let type = values.contentType,
+              allowedContentTypes.contains(where: { type.conforms(to: $0) }) else {
+            throw AudioFileError.notAudio
+        }
+    }
+
     nonisolated static func prepare(source: URL, destination: URL) async throws {
         try Task.checkCancellation()
         let asset = AVURLAsset(url: source)
@@ -49,12 +63,14 @@ enum TranscriptionAudioFile {
 }
 
 enum AudioFileError: LocalizedError {
+    case notAudio
     case noAudio
     case unsupportedAudio
     case noTranscript
 
     var errorDescription: String? {
         switch self {
+        case .notAudio: "Not an audio file."
         case .noAudio: "This file contains no audio. Choose another recording."
         case .unsupportedAudio: "This audio could not be decoded. Export the recording as M4A or WAV and try again."
         case .noTranscript: "No speech was detected in this recording."

@@ -9,7 +9,11 @@ struct HistoryView: View {
         let retryLanguages = viewModel.retryTranscriptionLanguages
 
         Group {
-            fileImport
+            Section {
+                Button("Transcribe File…", systemImage: "waveform.badge.plus") {
+                    dictation.showFileTranscription()
+                }
+            }
             if entries.isEmpty {
                 emptyState
             } else {
@@ -39,35 +43,6 @@ struct HistoryView: View {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    private var fileImport: some View {
-        let importState = dictation.fileTranscription
-        return Section {
-            HStack {
-                Button("Transcribe File…", systemImage: "waveform.badge.plus") {
-                    dictation.chooseTranscriptionFile()
-                }
-                .disabled(importState.isTranscribing)
-                Spacer()
-                if importState.isTranscribing {
-                    ProgressView().controlSize(.small)
-                    Button("Cancel") { importState.cancel() }
-                }
-            }
-            if importState.isTranscribing, let fileName = importState.fileName {
-                Text(fileName).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-            }
-            if let error = importState.error { SettingsNotice(error) }
-            if let result = importState.result, !viewModel.transcriptHistory.contains(where: { $0.id == result.id }) {
-                HStack {
-                    Text(result.sourceFileName ?? "Transcript").lineLimit(1).truncationMode(.middle)
-                    Spacer()
-                    Button("Copy", systemImage: "doc.on.doc") { viewModel.copy(result.text) }
-                }
-                Text(result.text).textSelection(.enabled)
             }
         }
     }
