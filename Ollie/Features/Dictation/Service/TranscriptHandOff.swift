@@ -13,5 +13,6 @@ struct TranscriptHandOff {
     }
 
     let id: UUID
+    let requestFinish: @MainActor () -> Void
     let finish: @MainActor (Result) -> Void
 }

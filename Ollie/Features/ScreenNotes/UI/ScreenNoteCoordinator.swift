@@ -67,7 +67,10 @@ final class ScreenNoteCoordinator {
         transcriptResult = nil
         fingerprints.removeAll()
         phase = .recording
-        let start = core.dictation.beginHandOff(TranscriptHandOff(id: id, finish: { [weak self] result in
+        let start = core.dictation.beginHandOff(TranscriptHandOff(id: id, requestFinish: { [weak self] in
+            guard let self, self.note?.id == id else { return }
+            self.finishNote()
+        }, finish: { [weak self] result in
             guard let self, self.note?.id == id else { return }
             if case .cancelled = result { self.stop(); return }
             self.transcriptResult = result
@@ -94,7 +97,8 @@ final class ScreenNoteCoordinator {
     func pointerTick(_ point: CGPoint, displayID: UInt32) {
         guard phase == .recording else { return }
         trackDisplay(displayID)
-        let held = NSEvent.modifierFlags.contains(.shift) && NSEvent.pressedMouseButtons == 0
+        let modifiers = NSEvent.modifierFlags.intersection([.command, .control, .option, .shift])
+        let held = modifiers == .shift && NSEvent.pressedMouseButtons == 0
         if drawing != held { drawing = held }
         if let stroke = ink.active {
             if held && stroke.displayID == displayID { append(point) } else { finishMark() }

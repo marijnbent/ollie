@@ -139,6 +139,8 @@ final class LauncherCoordinator {
         }
         paletteCoordinator.hidePalette(restoreFocus: false)
         switch app.kind {
+        case .application where app.bundleID == Bundle.main.bundleIdentifier:
+            settingsCoordinator.showSettings()
         case .application:
             AppLauncher.launch(app.url)
         case .systemSettings:

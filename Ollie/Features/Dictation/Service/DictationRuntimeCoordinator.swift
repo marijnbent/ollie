@@ -116,7 +116,8 @@ final class DictationRuntimeCoordinator {
     }
 
     var canCancelFromEsc: Bool {
-        handOff == nil && (recordingRuntime.phase != .idle || pasteTask != nil)
+        if handOff != nil { return recordingRuntime.phase == .recording }
+        return recordingRuntime.phase != .idle || pasteTask != nil
     }
 
     func recoverMonitor() { shortcutRuntime.recoverMonitor() }
@@ -191,6 +192,10 @@ final class DictationRuntimeCoordinator {
     }
 
     func cancelFromEsc() {
+        if let handOff {
+            handOff.finish(.cancelled)
+            return
+        }
         if recordingRuntime.phase != .idle {
             recordingRuntime.cancelFromEsc()
             return
@@ -219,7 +224,8 @@ final class DictationRuntimeCoordinator {
             self?.handleShortcutActions(actions)
         }
         shortcutRuntime.onCycleLanguage = { [weak self] in
-            self?.cycleLanguage()
+            guard let self else { return }
+            if let handOff = self.handOff { handOff.requestFinish() } else { self.cycleLanguage() }
         }
         windowCoordinator.onCycleLanguage = { [weak self] in
             self?.cycleLanguage()

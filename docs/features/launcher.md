@@ -8,6 +8,8 @@ earliest scope wins; within one folder, the newest `CFBundleShortVersionString` 
 - Ollie clears inherited `ELECTRON_RUN_AS_NODE` during startup. macOS app launches inherit the
   launcher's environment; retaining that tooling flag makes Electron apps exit without opening windows.
 
+- Opening Ollie's own application row opens Settings instead of relaunching the running app.
+
 - **`AppEntry.Kind` is the only thing that says what an entry is.** One case per launcher section, per
   `VisibilityStore` category and per Settings pane — never re-derive a category by sniffing an entry ID.
   A new category means a new case and a slice in `AppIndex.publishEntries()`, in that order.

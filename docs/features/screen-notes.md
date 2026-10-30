@@ -27,9 +27,9 @@ Press the shortcut to start talking. Ollie takes a clean screenshot of the displ
 and shows a recording widget there with Dictation's glass card, live audio orb and Widget position,
 plus a screenshot count, Cancel and Finish. Dictation's own widget stays hidden during the session.
 
-Hold **⇧ and move the pointer** to draw a red line on any display; no click is needed, and the ⇧ in
+Hold **⇧ and move the pointer** to draw a red line on any display; no click is needed, and the ⇧ keycap in
 the widget turns red while drawing. Releasing Shift saves one annotated screenshot and fades the line.
-Pressing Shift without moving 4 pt, or while a mouse button is down, draws nothing, so typing capitals
+Pressing Shift without moving 4 pt, with another modifier, or while a mouse button is down, draws nothing, so typing capitals
 and Shift-click selections are unaffected. There are no tools, ink settings or Snap button.
 Screenshots use a background requested when the line starts, with the stroke composited on release.
 Pending backgrounds and output stay bound to that stroke, even when a later capture completes first.
@@ -39,11 +39,10 @@ then schedule a clean screenshot after 500 ms, merging rapid captures. Keeping t
 display for 500 ms, or drawing on it, changes the narration context too. App changes choose the
 display containing the largest part of the frontmost window, falling back to the pointer display.
 
-Press the shortcut again, or click Finish, to stop narration. Ollie captures the final context,
+Press the shortcut again, press Super Caps Lock (⌃⌥⇧⌘), or click Finish, to stop narration. Ollie captures the final context,
 omits an unchanged background, waits for transcription and copies one screen note to the clipboard.
-It never pastes or submits a prompt. Cancel leaves the clipboard unchanged. Normal Dictation hotkeys
-and its Esc-to-cancel interception are suspended for the session so app-level Escape remains
-usable. A partial transcription or failed capture is reported; screenshots are still copied if speech fails.
+It never pastes or submits a prompt. Cancel, or Esc while recording, leaves the clipboard unchanged.
+Esc follows Dictation's Esc-to-cancel setting; other Dictation hotkeys are suspended for the session. A partial transcription or failed capture is reported; screenshots are still copied if speech fails.
 
 Screen Recording is requested only when starting a session. Drawing reads the pointer and Shift
 state on each display-link frame, so it needs no event monitor or Accessibility access.
