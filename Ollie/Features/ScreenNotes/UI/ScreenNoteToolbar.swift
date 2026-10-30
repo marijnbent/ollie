@@ -13,6 +13,11 @@ struct ScreenNoteToolbar: View {
                 .foregroundStyle(Color.primary.opacity(colorScheme == .dark ? 0.88 : 0.66))
                 .frame(minWidth: Theme.Size.screenNotesCount)
                 .accessibilityLabel("\(note.shotCount) screenshots")
+            Text("⇧")
+                .foregroundStyle(note.drawing ? Color(cgColor: ScreenInk.color)
+                                 : Color.primary.opacity(colorScheme == .dark ? 0.5 : 0.4))
+                .help("Hold Shift and move the pointer to draw")
+                .accessibilityLabel("Hold Shift to draw")
             HStack(spacing: Theme.Spacing.xs) {
                 button("Cancel", symbol: "xmark") { note.stop() }
                 button("Finish and copy", symbol: "checkmark") { note.finishNote() }
@@ -30,7 +35,7 @@ struct ScreenNoteToolbar: View {
                 appear = true
             }
         }
-        .help("Use the shortcut again to finish")
+        .help("Hold Shift to draw; use the shortcut again to finish")
     }
 
     private func button(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {

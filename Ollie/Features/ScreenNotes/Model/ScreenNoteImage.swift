@@ -8,10 +8,6 @@ enum ScreenNoteImage {
     enum Failure: Error { case rendering, encoding }
 
     static func render(_ image: CGImage, pointSize: CGSize, strokes: [ScreenInk.Stroke]) throws -> Data {
-        try encode(annotate(image, pointSize: pointSize, strokes: strokes))
-    }
-
-    static func annotate(_ image: CGImage, pointSize: CGSize, strokes: [ScreenInk.Stroke]) throws -> CGImage {
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
               let context = CGContext(data: nil, width: image.width, height: image.height,
                                       bitsPerComponent: 8, bytesPerRow: 0, space: space,
@@ -28,7 +24,7 @@ enum ScreenNoteImage {
             context.strokePath()
         }
         guard let result = context.makeImage() else { throw Failure.rendering }
-        return result
+        return try encode(result)
     }
 
     static func caption(_ image: CGImage, text: String, font: CTFont) throws -> Data {

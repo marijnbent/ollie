@@ -17,11 +17,7 @@ enum ScreenNoteClipboard {
         var files = try note.shots.map { shot -> (url: URL, png: Data?) in
             guard let source = CGImageSourceCreateWithURL(shot.file as CFURL, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ScreenNoteImage.Failure.rendering }
-            let strokes = note.pointerStrokes(for: shot)
-            let size = note.displaySizes[note.contexts.first { $0.id == shot.contextID }?.displayID ?? 0]
-            let annotated = try strokes.isEmpty ? image : ScreenNoteImage.annotate(
-                image, pointSize: size ?? CGSize(width: image.width, height: image.height), strokes: strokes)
-            let data = try ScreenNoteImage.caption(annotated, text: note.caption(for: shot), font: font)
+            let data = try ScreenNoteImage.caption(image, text: note.caption(for: shot), font: font)
             totalBytes += data.count
             guard totalBytes <= ScreenNote.maximumBytes else { throw CocoaError(.fileWriteOutOfSpace) }
             try data.write(to: shot.file, options: .atomic)

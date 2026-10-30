@@ -127,8 +127,8 @@ Extension menu extras remain owned by `ExtensionManager`.
   unless a modal panel holds key.
   See [features/palette.md](features/palette.md).
 - **Screen notes** — `ScreenNoteCoordinator` owns finite narrated screenshot sessions and temporary
-  pointer tracks, using Dictation's hand-off delivery. Nonactivating, click-through canvases cover
-  every display and draw a fading pointer trail. A small pill finishes or cancels without taking keyboard focus.
+  ink, using Dictation's hand-off delivery. Nonactivating, click-through canvases cover every display
+  and draw a marker while Shift is held. A small pill finishes or cancels without taking keyboard focus.
   See [screen notes](features/screen-notes.md).
 - **Settings and Onboarding** — titled `NSWindow`s, one `Windows/AppWindowController.swift` each, owned
   by `SettingsCoordinator` and `OnboardingCoordinator`. SwiftUI `Settings` and `Window` scenes are

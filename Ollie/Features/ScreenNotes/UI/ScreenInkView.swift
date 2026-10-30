@@ -2,30 +2,24 @@ import AppKit
 import QuartzCore
 
 final class ScreenInkView: NSView {
-    private static let lifetime: TimeInterval = 1
     private weak var coordinator: ScreenNoteCoordinator?
     private let displayID: UInt32
     private var link: CADisplayLink?
-    private var samples: [(point: CGPoint, time: TimeInterval)] = []
-    private let buckets: [CAShapeLayer]
+    private let strokeLayer = CAShapeLayer()
+    private var activePath = CGMutablePath()
 
     init(frame: NSRect, displayID: UInt32, coordinator: ScreenNoteCoordinator) {
         self.displayID = displayID
         self.coordinator = coordinator
-        buckets = (0..<8).map { index in
-            let freshness = 1 - CGFloat(index) / 8
-            let layer = CAShapeLayer()
-            layer.strokeColor = ScreenInk.color
-            layer.fillColor = nil
-            layer.lineWidth = ScreenInk.width * (0.4 + 0.6 * freshness)
-            layer.lineCap = .round
-            layer.lineJoin = .round
-            layer.opacity = Float(freshness)
-            return layer
-        }
         super.init(frame: frame)
         wantsLayer = true
-        for bucket in buckets.reversed() { layer?.addSublayer(bucket) }
+        layer?.masksToBounds = true
+        strokeLayer.strokeColor = ScreenInk.color
+        strokeLayer.fillColor = nil
+        strokeLayer.lineWidth = ScreenInk.width
+        strokeLayer.lineCap = .round
+        strokeLayer.lineJoin = .round
+        layer?.addSublayer(strokeLayer)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -42,35 +36,41 @@ final class ScreenInkView: NSView {
     func stop() {
         link?.invalidate()
         link = nil
-        samples.removeAll()
-        redraw(now: 0)
     }
 
-    @objc private func tick(_ link: CADisplayLink) {
+    @objc private func tick() {
         guard let window else { return }
         let location = NSEvent.mouseLocation
-        let inside = window.frame.contains(location)
-        let point = CGPoint(x: location.x - window.frame.minX, y: location.y - window.frame.minY)
-        if inside { coordinator?.samplePointer(point, displayID: displayID) }
-        let moved = inside && samples.last.map { hypot(point.x - $0.point.x, point.y - $0.point.y) >= 1 } != false
-        guard moved || !samples.isEmpty else { return }
-        let now = link.timestamp
-        samples.removeAll { now - $0.time > Self.lifetime }
-        if moved { samples.append((point, now)) }
-        redraw(now: now)
+        guard window.frame.contains(location) else { return }
+        coordinator?.pointerTick(CGPoint(x: location.x - window.frame.minX, y: location.y - window.frame.minY),
+                                 displayID: displayID)
     }
 
-    private func redraw(now: TimeInterval) {
-        let paths = buckets.map { _ in CGMutablePath() }
-        for (first, second) in zip(samples, samples.dropFirst()) {
-            let age = (now - first.time) / Self.lifetime
-            let path = paths[min(paths.count - 1, max(0, Int(age * Double(paths.count))))]
-            path.move(to: first.point)
-            path.addLine(to: second.point)
-        }
+    func begin(_ point: CGPoint) {
+        strokeLayer.removeAllAnimations()
+        activePath = CGMutablePath()
+        activePath.move(to: point)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for (bucket, path) in zip(buckets, paths) { bucket.path = path }
+        strokeLayer.path = activePath
         CATransaction.commit()
+    }
+
+    func append(_ point: CGPoint) {
+        activePath.addLine(to: point)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        strokeLayer.path = activePath
+        CATransaction.commit()
+    }
+
+    func fade() {
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = 1
+        animation.toValue = 0
+        animation.duration = 0.6
+        animation.fillMode = .forwards
+        animation.isRemovedOnCompletion = false
+        strokeLayer.add(animation, forKey: "fade")
     }
 }

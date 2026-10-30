@@ -64,12 +64,12 @@ enum ScreenNoteCapture {
         return Frame(image: image, displayID: displayID, pointSize: size)
     }
 
-    nonisolated static func save(_ frame: Frame, file: URL) throws
+    nonisolated static func save(_ frame: Frame, strokes: [ScreenInk.Stroke], file: URL) throws
         -> (byteCount: Int, fingerprint: Data) {
         try Task.checkCancellation()
         guard let pixels = frame.image.dataProvider?.data else { throw Failure.imageMissing }
         let fingerprint = Data(SHA256.hash(data: pixels as Data))
-        let data = try ScreenNoteImage.render(frame.image, pointSize: frame.pointSize, strokes: [])
+        let data = try ScreenNoteImage.render(frame.image, pointSize: frame.pointSize, strokes: strokes)
         try Task.checkCancellation()
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
                                                 withIntermediateDirectories: true,
