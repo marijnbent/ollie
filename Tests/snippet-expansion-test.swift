@@ -184,18 +184,20 @@ struct SnippetExpansionTests {
         }
         for prefix in ["", " ", "\n", "\t", "👩🏽‍💻 "] {
             check("AX boundary \(prefix.debugDescription)", SnippetExpansionPolicy.canStartSession(
-                value: prefix, selectedRange: NSRange(location: prefix.utf16.count, length: 0),
-                previousCharacter: "a"))
+                previousCharacter: nil,
+                focusedText: { (prefix, NSRange(location: prefix.utf16.count, length: 0)) }))
         }
         for prefix in ["-", "=", "a", "<div", "👩🏽‍💻"] {
             check("AX rejects nonboundary", !SnippetExpansionPolicy.canStartSession(
-                value: prefix, selectedRange: NSRange(location: prefix.utf16.count, length: 0),
-                previousCharacter: " "))
+                previousCharacter: nil,
+                focusedText: { (prefix, NSRange(location: prefix.utf16.count, length: 0)) }))
         }
-        check("fallback whitespace", SnippetExpansionPolicy.canStartSession(
-            value: nil, selectedRange: nil, previousCharacter: "\n"))
-        check("fallback operator", !SnippetExpansionPolicy.canStartSession(
-            value: nil, selectedRange: nil, previousCharacter: "-"))
+        check("typed space outranks trailing AX value", SnippetExpansionPolicy.canStartSession(
+            previousCharacter: " ", focusedText: { ("hello", NSRange(location: 5, length: 0)) }))
+        check("typed operator outranks AX", !SnippetExpansionPolicy.canStartSession(
+            previousCharacter: "-", focusedText: { ("", NSRange(location: 0, length: 0)) }))
+        check("no keystroke and no AX starts", SnippetExpansionPolicy.canStartSession(
+            previousCharacter: nil, focusedText: { nil }))
         let primaryHeight: CGFloat = 900
         let primaryCaret = CGRect(x: 20, y: 100, width: 1, height: 20)
         check("primary conversion ignores taller secondary", SnippetExpansionPolicy.appKitRect(

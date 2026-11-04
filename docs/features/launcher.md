@@ -798,8 +798,9 @@ the rest of the menu already has ([palette.md](palette.md)). Only `LauncherList`
 ## Inline snippets
 
 Outside Ollie, `>` starts an inline snippet query at the start of a line or after whitespace.
-The boundary comes from the focused AX value and selection when readable, otherwise from the last
-physical keystroke. Operators and tags such as `->`, `=>`, `a>b` and `<div>` do not start a query.
+The boundary comes from the last physical keystroke, because Chromium's AX value trails typing. A
+click, caret-moving key, Backspace or app switch clears it, and then the focused AX value and selection
+decide. Operators and tags such as `->`, `=>`, `a>b` and `<div>` do not start a query.
 Typing `>` prepares all snippets ranked by usage count, then most recent use. The picker first opens
 after the caret advances past `>`, with a 32 ms fallback when AX does not report the change.
 Tab and arrow selection remain available while opening; Escape cancels the pending display. Typed queries
@@ -825,13 +826,11 @@ typing Space, inserts the space and switches to a draft row; the text typed afte
 the tracked keystrokes. Backspace over the space returns to the query; Escape, a modifier chord or a
 navigation key leaves the text literal; Return on an empty draft passes through.
 
-The completing keystroke is consumed synchronously. `TextInjector` first replaces the already-forwarded
-trigger range through Accessibility, checking the trigger suffix before writing and reading the value
-back to confirm the replacement. Text-marker editors bypass AX writes. When AX replacement is
-unavailable or leaves the value unchanged, the same callback posts tagged backspaces and Unicode
-chunks through its event-tap proxy. Chunks contain at most four UTF-16 units, never split a scalar,
-and isolate newlines and tabs so AppKit cannot discard their adjacent text. A changed, unconfirmed AX
-value stops delivery instead of risking a second edit. Inline expansion does not borrow the clipboard.
+The completing keystroke is consumed synchronously. When the focused AX value is readable, the
+forwarded trigger must end it, or the replacement stops instead of editing the wrong text; text-marker
+editors skip that check. Tagged backspaces then delete the forwarded trigger and one Command-V pastes
+the snippet from the clipboard, lent for 400 ms and restored afterwards. Keys typed meanwhile are
+buffered and replayed. A paste that cannot start logs `Snippet paste skipped`.
 
 Placement is re-read on every query refresh: range caret bounds, text-marker caret bounds, focused
 text element's leading edge, then focused window. A previously resolved position remains a stable

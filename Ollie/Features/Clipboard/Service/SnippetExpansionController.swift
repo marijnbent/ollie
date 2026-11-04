@@ -157,6 +157,8 @@ final class SnippetExpansionController {
             cancelPendingInput()
         }
 
+        if type != .keyDown && type != .keyUp { previousCharacter = nil }
+
         guard type == .keyDown, let nsEvent = NSEvent(cgEvent: event) else {
             return Unmanaged.passUnretained(event)
         }
@@ -164,7 +166,7 @@ final class SnippetExpansionController {
         defer {
             let modifiers = nsEvent.modifierFlags.intersection([.command, .control, .option])
             previousCharacter = modifiers.isEmpty ? nsEvent.characters?.last : nil
-            if [51, 123, 124, 125, 126].contains(nsEvent.keyCode) { previousCharacter = nil }
+            if [51, 115, 116, 117, 119, 121, 123, 124, 125, 126].contains(nsEvent.keyCode) { previousCharacter = nil }
         }
 
         if shouldConsumeControlKey(nsEvent, postEvent: postEvent) {
@@ -245,15 +247,13 @@ final class SnippetExpansionController {
         }
 
         if characters == ">" && disallowedModifiers.isEmpty {
-            let element = focusedElement()
-            let value = element.flatMap { stringAttribute(kAXValueAttribute as CFString, for: $0) }
-            let range = element.flatMap { selectedTextRange(for: $0) }.map {
-                NSRange(location: $0.location, length: $0.length)
-            }
             cancelSession()
-            if SnippetExpansionPolicy.canStartSession(
-                value: value, selectedRange: range, previousCharacter: previousCharacter
-            ) {
+            if SnippetExpansionPolicy.canStartSession(previousCharacter: previousCharacter, focusedText: {
+                guard let element = focusedElement(),
+                      let value = stringAttribute(kAXValueAttribute as CFString, for: element),
+                      let range = selectedTextRange(for: element) else { return nil }
+                return (value, NSRange(location: range.location, length: range.length))
+            }) {
                 startSession()
             }
             return false
@@ -505,6 +505,7 @@ final class SnippetExpansionController {
         guard injector.pasteInline(
             content, deleting: typed.count, prepared: prepared, postEvent: postEvent, onFinished: resumeInput
         ) else {
+            Diagnostics(category: "snippets").warning("Snippet paste skipped")
             cancelPendingInput()
             return nil
         }

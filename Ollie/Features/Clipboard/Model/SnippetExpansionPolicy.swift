@@ -24,11 +24,15 @@ enum SnippetExpansionPolicy {
         }
     }
 
-    static func canStartSession(value: String?, selectedRange: NSRange?, previousCharacter: Character?) -> Bool {
-        if let value, let selectedRange, let range = Range(selectedRange, in: value) {
-            return value[..<range.lowerBound].last?.isWhitespace ?? true
+    /// Chromium's AX value trails typing, so the keystroke just seen outranks it.
+    static func canStartSession(
+        previousCharacter: Character?, focusedText: () -> (value: String, selectedRange: NSRange)?
+    ) -> Bool {
+        if let previousCharacter { return previousCharacter.isWhitespace }
+        guard let (value, selectedRange) = focusedText(), let caret = Range(selectedRange, in: value) else {
+            return true
         }
-        return previousCharacter?.isWhitespace ?? true
+        return value[..<caret.lowerBound].last?.isWhitespace ?? true
     }
 
     static func appKitRect(from accessibilityRect: CGRect, primaryScreenHeight: CGFloat) -> CGRect {
