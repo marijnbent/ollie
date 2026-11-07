@@ -99,8 +99,7 @@ because the app rewrites the file.
     "automaticallyCheckForUpdates": true,
     "popToRootSeconds": 0,
     "escapeKeyBehavior": "navigateBackOrClose",
-    "autoSwitchInputSource": null,
-    "supportReminders": true
+    "autoSwitchInputSource": null
   },
   "clipboard": {
     "enabled": true,

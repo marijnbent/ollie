@@ -42,7 +42,7 @@ extension CommandID {
         case .clipboardHistory: .clipboardHistory
         case .explainScreen: .screenExplanation
         case .exportSettings, .importSettings, .importFromRaycast, .checkForUpdates,
-             .settings, .about, .support, .restart, .quit: nil
+             .settings, .about, .restart, .quit: nil
         default: owner?.capability ?? .feature(.launcher)
         }
     }

@@ -42,7 +42,6 @@ enum CommandID: String, CaseIterable, Sendable {
     case checkForUpdates = "command:check-for-updates"
     case settings = "command:settings"
     case about = "command:about"
-    case support = "command:support"
     case restart = "command:restart"
     case quit = "command:quit"
 
@@ -87,7 +86,6 @@ enum CommandID: String, CaseIterable, Sendable {
         case .checkForUpdates: return "Check for Updates"
         case .settings: return "Ollie Settings"
         case .about: return "About Ollie"
-        case .support: return "Support Ollie"
         case .restart: return "Restart Ollie"
         case .quit: return "Quit Ollie"
         }
@@ -134,7 +132,6 @@ enum CommandID: String, CaseIterable, Sendable {
         case .checkForUpdates: return "arrow.down.circle"
         case .settings: return "gearshape"
         case .about: return "info.circle"
-        case .support: return "heart"
         case .restart: return "arrow.clockwise"
         case .quit: return "power"
         }

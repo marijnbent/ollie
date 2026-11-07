@@ -672,7 +672,6 @@ run updates-test           Ollie/Features/Updates/Model/*.swift \
 run update-check-test      Ollie/Features/Updates/Model/*.swift \
                            Ollie/Features/Updates/Service/UpdateCheckStore.swift \
                            Ollie/Platform/AppPaths.swift
-run support-test           Ollie/Features/Support/Model/*.swift
 run ai-provider-test       Ollie/Features/Settings/AppSettingsKey.swift \
                            Ollie/Features/AI/Model/*.swift \
                            Ollie/Features/AI/Settings/AISettingsStore.swift

@@ -22,7 +22,6 @@ struct AboutView: View {
     }()
 
     private static let iconSize: CGFloat = 88
-    private static let supportTile: CGFloat = 30
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,7 +33,6 @@ struct AboutView: View {
                 }
                 .settingsAnchor(.aboutAbout)
                 links
-                support
             }
             .formStyle(.grouped)
             .settingsScrollTarget(.about)
@@ -89,35 +87,6 @@ struct AboutView: View {
             }
         } header: {
             SettingsSectionHeader(.aboutLinks)
-        }
-    }
-
-    private var support: some View {
-        Section {
-            HStack(spacing: Theme.Spacing.xl) {
-                // Brand is a fixed hue, so an alpha on it holds up in both appearances.
-                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                    .fill(Theme.Colors.brand.opacity(0.16))
-                    .frame(width: Self.supportTile, height: Self.supportTile)
-                    .overlay(
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.Colors.brand)
-                    )
-                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                    SettingsRowTitle(.aboutLinks, "Support")
-                        .font(.body.weight(.medium))
-                    Text("Support the original Tinycast project.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: Theme.Spacing.lg)
-                Button("Support…") { core.supportCoordinator.showSupport() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Colors.brand)
-            }
-            .padding(.vertical, Theme.Spacing.xs)
         }
     }
 
