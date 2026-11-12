@@ -440,7 +440,7 @@ struct CGEventMonitorAdapter: EventMonitorPort {
     func addKeyDownInterceptor(
         handler: @escaping (CGKeyCode) -> Bool
     ) -> Any? {
-        addEventTap(location: .cgSessionEventTap, eventTypes: [.keyDown]) { type, event in
+        addEventTap(location: .cghidEventTap, eventTypes: [.keyDown]) { type, event in
             guard type == .keyDown else { return false }
             let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
             return handler(keyCode)

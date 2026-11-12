@@ -97,6 +97,11 @@ Access flags, login-item registration, and provider credentials are not carried 
 
 Dictation clipboard restoration requires both successful insertion verification and an unchanged
 clipboard change token. Starting another operation or disabling dictation cancels pending restoration.
+Escape belongs to Dictation's cancellation interceptor at the HID level, not the companion-key
+discard path. With cancellation disabled it passes through without discarding. Modifier shortcut
+releases use the physical side bits, so holding the opposite Option or Command key cannot turn a
+release into another press. Other companion keys discard the provisional recording without being
+consumed, leaving chords such as Option+/ available to Clipboard History.
 Shutdown waits for capture cancellation, queued history writes. Failed history
 flushes keep the app open instead of silently losing pending history.
 Cancelled dictation deletes managed raw recordings only when no history entry adopted them, including

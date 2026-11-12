@@ -70,10 +70,7 @@ final class ShortcutRuntimeTests {
     func testCompanionKeyDiscardsRecordingWhileShortcutIsHeldWithoutConsumingKey() {
         let harness = makeCompanionKeyHarness()
 
-        harness.eventMonitor.sendFlagsChanged(
-            keyCode: harness.shortcut.key.keyCode,
-            modifiers: harness.shortcut.key.modifierFlag
-        )
+        harness.pressShortcut()
         harness.clock.currentTime = 1
         let wasConsumed = harness.eventMonitor.sendKeyDown(CGKeyCode(kVK_ANSI_Slash))
 
@@ -84,10 +81,7 @@ final class ShortcutRuntimeTests {
     func testFnKeyDownDoesNotDiscardItsOwnQuickPress() {
         let harness = makeCompanionKeyHarness(key: .fn)
 
-        harness.eventMonitor.sendFlagsChanged(
-            keyCode: harness.shortcut.key.keyCode,
-            modifiers: harness.shortcut.key.modifierFlag
-        )
+        harness.pressShortcut()
         _ = harness.eventMonitor.sendKeyDown(CGKeyCode(harness.shortcut.key.keyCode))
         harness.clock.currentTime = 0.1
         harness.eventMonitor.sendFlagsChanged(
@@ -97,6 +91,56 @@ final class ShortcutRuntimeTests {
 
         assertFalse(harness.receivedActions.value.contains(.discard))
         assertTrue(harness.receivedActions.value.contains(.setLatched(true)))
+    }
+
+    func testEscapeCancelsHeldAndLatchedRecordingWithoutDiscarding() {
+        for latched in [false, true] {
+            let harness = makeCompanionKeyHarness()
+            var cancelled = false
+            let escape = EscCancelMonitor(
+                eventMonitor: harness.eventMonitor,
+                isEnabled: { true },
+                shouldCancel: { !cancelled && !harness.receivedActions.value.contains(.discard) },
+                cancelRecording: { cancelled = true }
+            )
+            escape.start()
+            harness.pressShortcut()
+            if latched { harness.releaseShortcut() }
+
+            assertTrue(harness.eventMonitor.sendKeyDown(CGKeyCode(kVK_Escape)))
+            assertTrue(cancelled)
+            assertFalse(harness.receivedActions.value.contains(.discard))
+            assertFalse(harness.eventMonitor.sendKeyDown(CGKeyCode(kVK_Escape)))
+            escape.stop()
+        }
+    }
+
+    func testDisabledEscapeDoesNotCancelOrDiscardRecording() {
+        let harness = makeCompanionKeyHarness()
+        let escape = EscCancelMonitor(
+            eventMonitor: harness.eventMonitor, isEnabled: { false }, shouldCancel: { true },
+            cancelRecording: { testFailure("Disabled Escape cancelled recording") }
+        )
+        escape.start()
+        harness.pressShortcut()
+
+        assertFalse(harness.eventMonitor.sendKeyDown(CGKeyCode(kVK_Escape)))
+        assertFalse(harness.receivedActions.value.contains(.discard))
+        escape.stop()
+    }
+
+    func testReleasingRightOptionWhileLeftOptionIsHeldEndsGesture() {
+        let harness = makeCompanionKeyHarness()
+        harness.pressShortcut()
+        harness.eventMonitor.sendFlagsChanged(
+            keyCode: UInt16(kVK_Option),
+            modifiers: NSEvent.ModifierFlags(rawValue: NSEvent.ModifierFlags.option.rawValue | 0x0060)
+        )
+        harness.releaseShortcut(modifiers: NSEvent.ModifierFlags(rawValue: NSEvent.ModifierFlags.option.rawValue | 0x0020))
+
+        assertEqual(harness.receivedActions.value.last, .setLatched(true))
+        _ = harness.eventMonitor.sendKeyDown(CGKeyCode(kVK_ANSI_Slash))
+        assertFalse(harness.receivedActions.value.contains(.discard))
     }
 
     func testShippedThresholdClassifiesByListenedTime() {
@@ -174,11 +218,21 @@ private struct CompanionKeyHarness {
     let receivedActions: ShortcutActionRecorder
 
     func pressShortcut() {
-        eventMonitor.sendFlagsChanged(keyCode: shortcut.key.keyCode, modifiers: shortcut.key.modifierFlag)
+        let deviceMask: UInt = switch shortcut.key {
+        case .fn: 0
+        case .leftControl: 0x0001
+        case .leftCommand: 0x0008
+        case .rightCommand: 0x0010
+        case .rightOption: 0x0040
+        }
+        eventMonitor.sendFlagsChanged(
+            keyCode: shortcut.key.keyCode,
+            modifiers: NSEvent.ModifierFlags(rawValue: shortcut.key.modifierFlag.rawValue | deviceMask)
+        )
     }
 
-    func releaseShortcut() {
-        eventMonitor.sendFlagsChanged(keyCode: shortcut.key.keyCode, modifiers: [])
+    func releaseShortcut(modifiers: NSEvent.ModifierFlags = []) {
+        eventMonitor.sendFlagsChanged(keyCode: shortcut.key.keyCode, modifiers: modifiers)
     }
 
     func startListening() {

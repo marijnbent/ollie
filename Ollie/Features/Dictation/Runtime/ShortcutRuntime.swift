@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Foundation
 
 @MainActor
@@ -101,7 +102,7 @@ final class ShortcutRuntime {
         }
 
         for shortcut in shortcuts where shortcut.hotkey.keyCode == keyCode {
-            let eventType: ShortcutEventType = normalizedModifiers.contains(shortcut.hotkey.modifiers)
+            let eventType: ShortcutEventType = modifiers.contains(shortcut.hotkey.modifiers)
                 ? .keyDown
                 : .keyUp
             dispatch(
@@ -157,6 +158,7 @@ final class ShortcutRuntime {
     }
 
     private func handleCompanionKeyDown(keyCode: CGKeyCode) {
+        guard keyCode != CGKeyCode(kVK_Escape) else { return }
         guard let pendingShortcutGesture,
               keyCode != pendingShortcutGesture.keyCode else { return }
 
