@@ -62,8 +62,8 @@ Five load-bearing ideas, in priority order:
 The 320-point menu uses `HUDGlassBackground`, matching the launcher and clipboard material,
 tint, border, 16-point corners and Reduce Transparency treatment. The header is 42 points high;
 its app options button remains quiet until hovered. History opens Dictation's History pane directly.
-The latest nonempty refined transcript has a five-line preview, Copy and Paste. Up to three other
-recent nonempty transcripts appear below it; clicking one pastes its full refined or original text.
+Only the latest nonempty refined transcript appears, with a five-line preview, Copy and Paste.
+Older transcripts remain in History.
 Paste closes the panel and targets the application that was frontmost when the menu opened.
 Dictate, Clipboard and Settings stay in one icon strip with 34-point targets, 4-point gaps and
 12-point outer padding. Tooltips and accessibility labels identify every icon; shortcut labels are omitted.

@@ -62,7 +62,6 @@ private final class HistoryFixture: TranscriptHistoryPersisting, @unchecked Send
     private static func menuHistory() {
         let state = DictationSessionState()
         assertNil(state.latestRefinedEntry)
-        assertTrue(state.recentMenuEntries.isEmpty)
         let timestamp = Date(timeIntervalSince1970: 1_000)
         let failed = TranscriptHistoryEntry(timestamp: timestamp, text: " ", transcriptionError: "Failed")
         let original = TranscriptHistoryEntry(timestamp: timestamp, text: " New original ", enhancedText: " \n")
@@ -70,18 +69,14 @@ private final class HistoryFixture: TranscriptHistoryPersisting, @unchecked Send
             timestamp: timestamp, text: "original", enhancedText: " First. Second. Third. Fourth. "
         )
         let older = TranscriptHistoryEntry(timestamp: timestamp, text: "older", enhancedText: "Older refined")
-        let oldest = TranscriptHistoryEntry(timestamp: timestamp, text: "oldest")
-        state.loadHistory([failed, original, refined, older, oldest, original])
+        state.loadHistory([failed, original, refined, older])
         assertEqual(state.latestRefinedEntry?.id, refined.id)
-        assertEqual(refined.pasteText, "First. Second. Third. Fourth.")
-        assertEqual(original.pasteText, "New original")
-        assertEqual(state.recentMenuEntries.map(\.id), [original.id, older.id, oldest.id])
+        assertEqual(refined.refinedText, "First. Second. Third. Fourth.")
+        assertNil(original.refinedText)
         state.transcriptHistory = [failed, original]
         assertNil(state.latestRefinedEntry)
-        assertEqual(state.recentMenuEntries.map(\.id), [original.id])
         state.applyHistoryLimit(.none)
         assertNil(state.latestRefinedEntry)
-        assertTrue(state.recentMenuEntries.isEmpty)
     }
 
     private static func mercuryRequests() throws {
