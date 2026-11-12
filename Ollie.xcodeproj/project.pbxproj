@@ -665,6 +665,7 @@
 		B77229B2F28E4F2E167D1584 /* ExtensionRefreshState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB7B0DCD626533A965A6F4FC /* ExtensionRefreshState.swift */; };
 		B7AAA21A4970B1005595B710 /* ClipboardStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34878F61BBD219C1ECDA2079 /* ClipboardStorage.swift */; };
 		B89E7FCDF79B98FA6DB0B7A9 /* WindowLayoutsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41285645D45C9C60A6279E3 /* WindowLayoutsSection.swift */; };
+		B92F10517948724C75253120 /* DictationMenuSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F5388933334128CF25B29C8 /* DictationMenuSection.swift */; };
 		B946B830B612F675803A5B0D /* UpdateCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1F78C38786428382478847 /* UpdateCoordinator.swift */; };
 		B955FB377CB5D025BBE1E67C /* ClipboardWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4432A72D29CEF0653D7BE9A /* ClipboardWatcher.swift */; };
 		B96A5B08E142BE032771638A /* RoomsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE2CDE842EF90DBDCA4C21D /* RoomsSection.swift */; };
@@ -787,7 +788,6 @@
 		DD538E7689933AE36E643173 /* HUDGlassBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBDE40A34F4C4ECEC1B8353E /* HUDGlassBackground.swift */; };
 		DDB855B82244D103CDB08582 /* CustomWindowSizeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 271FAAC7DDC05C4CA292343A /* CustomWindowSizeStore.swift */; };
 		DDECD29B83F7C42FB470E43D /* CommandOutputPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C84A1B430E7ACED83004D04 /* CommandOutputPresenter.swift */; };
-		DDEF51C78652E2CD231D632B /* NetworkMenuSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8714547F52229102ED5AF0 /* NetworkMenuSection.swift */; };
 		DEE809699372D74EEE14F7E0 /* Scrypt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8947F23AF3356844C34901 /* Scrypt.swift */; };
 		DF024209FB32C33169DD2E22 /* CalendarAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = F914080F11E918B896FA46FA /* CalendarAccess.swift */; };
 		DF044240B6D5C5F92445E944 /* DoubleTapDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE71066CFE42DAE22785955 /* DoubleTapDetector.swift */; };
@@ -936,6 +936,7 @@
 		0DF162BB7B00D623430866D8 /* DictationSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSettingsStore.swift; sourceTree = "<group>"; };
 		0E68036CEF97734664939EBD /* LauncherMatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherMatch.swift; sourceTree = "<group>"; };
 		0EB2C8DC2A88CB5980EDE248 /* CalendarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarStore.swift; sourceTree = "<group>"; };
+		0F5388933334128CF25B29C8 /* DictationMenuSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationMenuSection.swift; sourceTree = "<group>"; };
 		0F5E1E853FE51069E7ACFFB3 /* UpdateCheckStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheckStore.swift; sourceTree = "<group>"; };
 		0F8EDEBD741353C02957952E /* InstalledAIManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstalledAIManager.swift; sourceTree = "<group>"; };
 		1034C4542B0F38534C95A338 /* AIRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRequest.swift; sourceTree = "<group>"; };
@@ -1421,7 +1422,6 @@
 		997C8AA0BF7E3763060854A3 /* ImportSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportSupport.swift; sourceTree = "<group>"; };
 		99AA7AE19F1F61E524FD3C5F /* WindowMover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowMover.swift; sourceTree = "<group>"; };
 		9A740A7F6C1A4EFBE3E6AE15 /* CommandEscapeTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandEscapeTap.swift; sourceTree = "<group>"; };
-		9A8714547F52229102ED5AF0 /* NetworkMenuSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMenuSection.swift; sourceTree = "<group>"; };
 		9A87264EA8EC629BA3412EC4 /* Zlib.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Zlib.swift; sourceTree = "<group>"; };
 		9B61C8ABB7742A349F9520EC /* ChatCitations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCitations.swift; sourceTree = "<group>"; };
 		9B6BADA5FB62D24120630F13 /* CustomWindowSizeEditorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomWindowSizeEditorPanel.swift; sourceTree = "<group>"; };
@@ -2321,6 +2321,7 @@
 				D44653216EDE951F4D6C193A /* AppOverrideComponents.swift */,
 				21739A1E86CC23966F4D0FF9 /* DictationAppPickerState.swift */,
 				F93A695086FB2A6C4267EC7C /* DictationGeneralSettingsView.swift */,
+				0F5388933334128CF25B29C8 /* DictationMenuSection.swift */,
 				4A010AFA0574D8FD9EB9ABDF /* DictationWindowCoordinator.swift */,
 				6E6CD383826DF22C32A60302 /* EnhancementsSettingsView.swift */,
 				E2ACDB94EC618A4A9898879C /* FileTranscriptionController.swift */,
@@ -3576,7 +3577,6 @@
 			isa = PBXGroup;
 			children = (
 				6B7D354E0EBCBA8B00489FB4 /* NetworkCoordinator.swift */,
-				9A8714547F52229102ED5AF0 /* NetworkMenuSection.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -4236,6 +4236,7 @@
 				284F30D4C0F21CBCAE9991D9 /* DictationCredential.swift in Sources */,
 				DBEF9EFE65C6103BD7F92749 /* DictationGeneralSettingsView.swift in Sources */,
 				04345E8378842C5EAB419C25 /* DictationHTTP.swift in Sources */,
+				B92F10517948724C75253120 /* DictationMenuSection.swift in Sources */,
 				2EDF528CA796DDF2D6EA87EB /* DictationOverlayController.swift in Sources */,
 				11768209F93AB02D0A79B97D /* DictationPermissionService.swift in Sources */,
 				46F371C926D016A028A8A919 /* DictationPreferences.swift in Sources */,
@@ -4526,7 +4527,6 @@
 				75FA87AD69F4C8332236512F /* NetTopMonitor.swift in Sources */,
 				0219AFA2891B3E1581251725 /* NetworkAppIcons.swift in Sources */,
 				1308CAAECC02A25E393CF3B0 /* NetworkCoordinator.swift in Sources */,
-				DDEF51C78652E2CD231D632B /* NetworkMenuSection.swift in Sources */,
 				FAC52B28EB93F0ED25FCF2C3 /* NetworkSettingsView.swift in Sources */,
 				817AF8CEEF84480174718504 /* NoteBlockDecoration.swift in Sources */,
 				B724904B0638E3E4651927F7 /* NoteBlockLayoutFragment.swift in Sources */,
@@ -4921,7 +4921,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = X44F5HTS6P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -5008,7 +5008,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEPLOYMENT_POSTPROCESSING = YES;

@@ -3,15 +3,51 @@ import SwiftUI
 struct CompactMenuView: View {
     let core: AppCore
     let close: () -> Void
+    let paste: (String) -> Void
     @State private var optionsHovered = false
-    @State private var notificationsHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Text(Bundle.main.appDisplayName).font(.system(size: 13, weight: .medium))
                 Spacer()
+                if core.settings.allows(.feature(.dictation)) {
+                    Button("History", systemImage: "clock.arrow.circlepath") {
+                        perform { core.dictation.showHistory() }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                }
                 Menu {
+                    if core.settings.allows(.feature(.launcher)) {
+                        Button("Launcher", systemImage: "square.grid.2x2") {
+                            perform { core.paletteCoordinator.showPalette(mode: .launcher) }
+                        }
+                    }
+                    if core.settings.allows(.feature(.ai)) {
+                        Button("AI Chat", systemImage: "sparkles") { perform { core.aiChatCoordinator.showWindow() } }
+                    }
+                    if core.settings.allows(.feature(.mediaImport)) {
+                        Button("Media Import", systemImage: "externaldrive.badge.plus") { perform { core.mediaImport.show() } }
+                    }
+                    if core.settings.allows(.feature(.notifications)) {
+                        Button(core.notifications.unread > 0 ? "Notifications (\(core.notifications.unread))" : "Notifications",
+                               systemImage: "bell") {
+                            perform { core.settingsCoordinator.showSettings(tab: .notifications) }
+                        }
+                    }
+                    if core.settings.allows(.feature(.network)) {
+                        Button("Network", systemImage: "network") {
+                            perform { core.settingsCoordinator.showSettings(tab: .network) }
+                        }
+                    }
+                    if core.settings.allows(.feature(.typingSounds)) {
+                        Button("Turn Off Typing Sounds", systemImage: "speaker.slash") {
+                            core.settings.typingSoundsEnabled = false
+                        }
+                    }
+                    Divider()
                     if core.settings.allows(.screenExplanation) {
                         Button("Screen Note", systemImage: "mic.badge.plus") { perform { core.screenNotes.toggle() } }
                     }
@@ -60,65 +96,23 @@ struct CompactMenuView: View {
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
             }
-            if core.settings.allows(.feature(.notifications)) {
-                Button {
-                    perform { core.settingsCoordinator.showSettings(tab: .notifications) }
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "bell").frame(width: 22)
-                        Text("Notifications").font(.system(size: 12, weight: .medium))
-                        Spacer()
-                        if core.notifications.unread > 0 {
-                            Text("\(core.notifications.unread)")
-                                .font(.system(size: 11)).monospacedDigit()
-                                .foregroundStyle(Theme.Colors.textSecondary)
-                        }
-                        Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.tertiary)
-                    }
-                    .padding(.horizontal, 8)
-                    .frame(height: 40)
-                    .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.barControl))
-                    .background(notificationsHovered ? Theme.Colors.rowHover : .clear,
-                        in: RoundedRectangle(cornerRadius: Theme.Radius.barControl))
-                }
-                .buttonStyle(.plain)
-                .onHover { notificationsHovered = $0 }
-                .padding(.horizontal, 8)
+            if core.settings.allows(.feature(.dictation)) {
+                DictationMenuSection(paste: paste)
+                    .environment(core.dictation)
             }
-            if core.settings.allows(.feature(.network)) {
-                NetworkMenuSection(network: core.network) {
-                    perform { core.settingsCoordinator.showSettings(tab: .network) }
-                }
-            }
-            if (core.settings.allows(.feature(.dictation)) && core.dictation.isBusy)
-                || (core.settings.allows(.feature(.mediaImport)) && core.mediaImport.state.isImporting)
-                || core.settings.allows(.feature(.notifications)) || core.settings.allows(.feature(.network)) {
+            if core.settings.allows(.feature(.dictation))
+                || (core.settings.allows(.feature(.mediaImport)) && core.mediaImport.state.isImporting) {
                 Rectangle().fill(Theme.Colors.separator).frame(height: 0.5)
                     .padding(.horizontal, 16).padding(.top, 6)
             }
             HStack(spacing: 4) {
-                if core.settings.allows(.feature(.launcher)) {
-                    action("Launcher", symbol: "square.grid.2x2") { core.paletteCoordinator.showPalette(mode: .launcher) }
+                if core.settings.allows(.feature(.dictation)) {
+                    action("Dictate", symbol: "mic") { core.dictation.toggleRecording() }
                 }
                 if core.settings.allows(.clipboardHistory) {
                     action("Clipboard", symbol: "clipboard") { core.clipboard.show() }
                 }
-                if core.settings.allows(.feature(.dictation)) {
-                    action("Dictate", symbol: "mic") { core.dictation.toggleRecording() }
-                }
-                if core.settings.allows(.feature(.ai)) {
-                    action("AI Chat", symbol: "sparkles") { core.aiChatCoordinator.showWindow() }
-                }
-                if core.settings.allows(.feature(.mediaImport)) {
-                    action("Media Import", symbol: "externaldrive.badge.plus") { core.mediaImport.show() }
-                }
                 Spacer(minLength: 0)
-                if core.settings.allows(.feature(.typingSounds)) {
-                    ActionButton(title: "Typing Sounds", symbol: "speaker.wave.2", selected: true) {
-                        core.settings.typingSoundsEnabled = false
-                    }
-                    .accessibilityValue("On")
-                }
                 action("Settings", symbol: "gearshape") { core.settingsCoordinator.showSettings() }
             }
             .padding(.horizontal, 12)
@@ -138,7 +132,6 @@ struct CompactMenuView: View {
     private struct ActionButton: View {
         let title: String
         let symbol: String
-        var selected = false
         let run: () -> Void
         @State private var hovered = false
 
@@ -146,9 +139,9 @@ struct CompactMenuView: View {
             Button(action: run) {
                 Image(systemName: symbol)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(selected ? Color.accentColor : Theme.Colors.textSecondary)
+                    .foregroundStyle(Theme.Colors.textSecondary)
                     .frame(width: 34, height: 34)
-                    .background(selected ? Theme.Colors.selection : hovered ? Theme.Colors.rowHover : .clear,
+                    .background(hovered ? Theme.Colors.rowHover : .clear,
                         in: RoundedRectangle(cornerRadius: Theme.Radius.barControl))
                     .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.barControl))
             }

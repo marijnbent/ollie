@@ -5,6 +5,10 @@ import SwiftUI
 @MainActor
 @Observable
 final class DictationCoordinator: HealthCheckable {
+    enum SettingsPane: String, CaseIterable {
+        case general = "Recording", shortcuts = "Shortcuts", enhancements = "Prompts", history = "History", logs = "Logs"
+    }
+
     let settings = DictationSettingsStore()
     let session: DictationSessionState
     let permissions = DictationPermissionService()
@@ -59,6 +63,7 @@ final class DictationCoordinator: HealthCheckable {
     private(set) var isRunning = false
     private(set) var isProcessing = false
     private(set) var conflict: String?
+    var settingsPane = SettingsPane.general
     var isCapturingShortcut = false { didSet { apply() } }
     var isBusy: Bool { session.recordingPhase != .idle || isProcessing || fileTranscription.isBusy }
 
@@ -90,6 +95,16 @@ final class DictationCoordinator: HealthCheckable {
         settings.loadCredentials()
         permissions.refreshPermissions()
         loadHistory()
+    }
+
+    func showHistory() {
+        settingsPane = .history
+        core.settingsCoordinator.showSettings(tab: .dictation)
+    }
+
+    func pasteHistoryText(_ text: String, into application: NSRunningApplication?) {
+        guard core.settings.dictationEnabled, !text.trimmed.isEmpty else { return }
+        Paster.pasteString(text, previousApp: application)
     }
 
     func showFileTranscription() {
@@ -223,8 +238,8 @@ final class DictationCoordinator: HealthCheckable {
         }
     }
 
-    private func loadHistory() {
-        guard !historyLoaded, loadTask == nil else { return }
+    func loadHistory() {
+        guard core.settings.dictationEnabled, !historyLoaded, loadTask == nil else { return }
         loadTask = Task { [weak self] in
             guard let self else { return }
             defer { loadTask = nil }

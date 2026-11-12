@@ -61,17 +61,20 @@ Five load-bearing ideas, in priority order:
 
 The 320-point menu uses `HUDGlassBackground`, matching the launcher and clipboard material,
 tint, border, 16-point corners and Reduce Transparency treatment. The header is 42 points high;
-its app options button remains quiet until hovered. Feature actions stay in one icon strip with
-34-point targets, 4-point gaps and 12-point outer padding. Typing Sounds appears only while
-enabled, with a selected fill; clicking it turns the feature off and removes it. Tooltips and
-accessibility labels identify every icon; shortcut labels are omitted.
+its app options button remains quiet until hovered. History opens Dictation's History pane directly.
+The latest nonempty refined transcript has a five-line preview, Copy and Paste. Up to three other
+recent nonempty transcripts appear below it; clicking one pastes its full refined or original text.
+Paste closes the panel and targets the application that was frontmost when the menu opened.
+Dictate, Clipboard and Settings stay in one icon strip with 34-point targets, 4-point gaps and
+12-point outer padding. Tooltips and accessibility labels identify every icon; shortcut labels are omitted.
 
 Disabled features contribute no actions or status rows. Settings and app options remain available
 when every feature is off. The separate calendar and extension menu items follow feature availability.
 
-Notifications and Network use matching inset hover rows. An unread count appears only when nonzero.
+Launcher, AI Chat, Media Import, Notifications, Network and the Typing Sounds off action live in app
+options. The Notifications action includes its unread count only when nonzero.
 Recording and import controls retain their live status and cancellation actions. An inset divider
-separates visible status rows from the action strip; an idle menu has no empty status section.
+separates history and visible status rows from the action strip.
 Opening the menu clears control focus. Tab navigation can still focus its controls with a visible ring.
 
 ## Non-negotiable invariants

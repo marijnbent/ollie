@@ -52,7 +52,7 @@ import SwiftUI
                 let view = SettingsRootView().settingsEnvironment(core: core, navigation: navigation, editorPresenter: presenter)
                 try await capture(view, size: CGSize(width: 980, height: 720), to: output.appendingPathComponent("\(tab)-\(suffix).png"))
             }
-            try await capture(CompactMenuView(core: core, close: {}), size: CGSize(width: 320, height: 160),
+            try await capture(CompactMenuView(core: core, close: {}, paste: { _ in }), size: CGSize(width: 320, height: 160),
                 to: output.appendingPathComponent("menu-\(suffix).png"))
         }
         print("PASS: mounted \(SettingsTab.available.count) native settings panes and captured compact menu in both appearances")

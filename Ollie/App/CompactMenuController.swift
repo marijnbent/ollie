@@ -7,6 +7,7 @@ final class CompactMenuController: NSObject, NSWindowDelegate {
     private var item: NSStatusItem?
     private var panel: CompactMenuPanel?
     private var clickMonitor: Any?
+    private var previousApp: NSRunningApplication?
 
     init(core: AppCore) {
         self.core = core
@@ -32,6 +33,8 @@ final class CompactMenuController: NSObject, NSWindowDelegate {
             close()
             return
         }
+        previousApp = NSWorkspace.shared.frontmostApplication
+        if core.settings.allows(.feature(.dictation)) { core.dictation.loadHistory() }
         if panel == nil {
             let panel = CompactMenuPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 320, height: 100),
@@ -44,7 +47,13 @@ final class CompactMenuController: NSObject, NSWindowDelegate {
             panel.isReleasedWhenClosed = false
             panel.delegate = self
             panel.onEscape = { [weak self] in self?.close() }
-            let host = NSHostingView(rootView: CompactMenuView(core: core, close: { [weak self] in self?.close() })
+            let host = NSHostingView(rootView: CompactMenuView(
+                core: core, close: { [weak self] in self?.close() },
+                paste: { [weak self] text in
+                    guard let self else { return }
+                    close()
+                    core.dictation.pasteHistoryText(text, into: previousApp)
+                })
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { [weak self] size in
                     self?.resize(height: size.height)
                 })

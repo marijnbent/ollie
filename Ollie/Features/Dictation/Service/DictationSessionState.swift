@@ -61,6 +61,15 @@ final class DictationSessionState {
         appStatus.message
     }
 
+    var latestRefinedEntry: TranscriptHistoryEntry? {
+        transcriptHistory.first { $0.refinedText != nil }
+    }
+
+    var recentMenuEntries: [TranscriptHistoryEntry] {
+        let refinedID = latestRefinedEntry?.id
+        return Array(transcriptHistory.lazy.filter { $0.id != refinedID && !$0.pasteText.isEmpty }.prefix(3))
+    }
+
     private var transcriptSegments: [String] = []
 
     init(
@@ -323,6 +332,15 @@ struct TranscriptHistoryEntry: Codable, Identifiable {
         self.transcriptionLanguage = transcriptionLanguage
         self.usedActiveAppPrompt = usedActiveAppPrompt
         self.sourceFileName = sourceFileName
+    }
+
+    var refinedText: String? {
+        guard let text = enhancedText?.trimmed, !text.isEmpty else { return nil }
+        return text
+    }
+
+    var pasteText: String {
+        refinedText ?? text.trimmed
     }
 
     var displayText: String {

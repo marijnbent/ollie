@@ -61,7 +61,8 @@ settings use the feature coordinator environments. Features is the default setti
 all master switches. Disabled feature panes and their search results are hidden; navigation history
 drops them and stale links return to Features. Launcher owns the Applications and Emoji panes.
 Clipboard uses the palette’s floating two-column mode; media import retains its task window; dictation retains its recording overlay. The compact menu has icon actions, live
-recording/import state, notifications, network usage, and settings. Shortcut information lives in
+recording/import state, dictation history with the latest refined text to copy or paste, and settings.
+Other feature actions, including notifications and network settings, live in app options. Shortcut information lives in
 settings and tooltips, with no menu row dedicated to displaying a shortcut.
 
 The copied speech transports and audio capture keep serial queues at callback boundaries to retain
