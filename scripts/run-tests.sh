@@ -415,7 +415,7 @@ run uninstall-test         Ollie/Features/Uninstall/Model/UninstallTarget.swift 
                            Ollie/Features/Uninstall/Model/UninstallPlan.swift
 run text-injection-test Ollie/Features/TextInjection/Service/*.swift \
     Ollie/Features/Quicklinks/Model/QuicklinkTemplateEngine.swift \
-    Ollie/Platform/{Paster,PasteboardFiles,Permissions,AccessibilityText,CalendarAccess,CameraAccess}.swift
+    Ollie/Platform/{Diagnostics,Paster,PasteboardFiles,Permissions,AccessibilityText,CalendarAccess,CameraAccess}.swift
 
 run quicklink-template-test Ollie/Features/Quicklinks/Model/QuicklinkTemplateEngine.swift
 
@@ -609,7 +609,7 @@ run ollie-clipboard-test -parse-as-library \
     Ollie/Platform/Diagnostics.swift \
     Ollie/Features/Clipboard/Service/SnippetStore.swift \
     Ollie/Features/Clipboard/Service/PasteController.swift \
-    Ollie/Platform/NotificationToken.swift
+    Ollie/Platform/{NotificationToken,Paster,PasteboardFiles,Permissions,AccessibilityText,CalendarAccess,CameraAccess}.swift
 run clipboard-coordinator-test -parse-as-library \
     Ollie/Features/Clipboard/Service/ClipboardNavigationDiagnostics.swift \
     Ollie/Features/Clipboard/ClipboardCoordinator.swift \

@@ -90,8 +90,8 @@ not consulted during startup or operation. Original histories and media files we
 Clipboard content paths reject traversal and symlinks.
 Disabling Clipboard cancels its pending copies, pastes and OCR; Snippets has independent cancellation.
 A shared panel switches to the remaining enabled feature, or closes when both are disabled.
-Search refreshes preserve the latest selection by item identity. Delayed paste requires the original
-clipboard change count and active target before posting keystrokes.
+Search refreshes preserve the latest selection by item identity. A palette paste waits until the target
+is frontmost (up to 1.5 s), then requires the original clipboard change count before posting ⌘V.
 Access flags, login-item registration, and provider credentials are not carried by settings.json.
 
 Dictation clipboard restoration requires both successful insertion verification and an unchanged

@@ -1,7 +1,6 @@
 import AppKit
 import ApplicationServices
 import AVFoundation
-import Carbon
 import Foundation
 
 @MainActor
@@ -421,20 +420,7 @@ final class NSPasteboardAdapter: PasteboardPort {
     }
 
     func sendPasteCommand() -> Bool {
-        guard let source = CGEventSource(stateID: .combinedSessionState) else {
-            return false
-        }
-
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
-        keyDown?.flags = .maskCommand
-        keyDown?.setIntegerValueField(.eventSourceUserData, value: Paster.ollieEventTag)
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false)
-        keyUp?.flags = .maskCommand
-        keyUp?.setIntegerValueField(.eventSourceUserData, value: Paster.ollieEventTag)
-
-        keyDown?.post(tap: .cghidEventTap)
-        keyUp?.post(tap: .cghidEventTap)
-        return true
+        Paster.postCommandV()
     }
 }
 

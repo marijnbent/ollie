@@ -191,12 +191,8 @@ final class ExtensionHostBridge: ExtensionHostAPI {
                 if method == "paste" { context?.closeMainWindow(clearRootSearch: false) }
                 writeFileToPasteboard(path, concealed: method == "copy" && concealed)
                 guard method == "paste" else { return nil }
-                target?.activate()
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(350))
-                    guard !Task.isCancelled else { return }
-                    Paster.postCommandV()
-                }
+                let changeCount = NSPasteboard.general.changeCount
+                Task { await Paster.paste(into: target, expectedChangeCount: changeCount) }
                 return nil
             }
             guard let text = clipboardText(from: content) else { return nil }

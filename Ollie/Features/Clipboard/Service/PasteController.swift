@@ -16,8 +16,6 @@ enum PreparedClipboardContent: Sendable, Equatable {
 
 @MainActor
 enum PasteController {
-    private static let pasteDelay: TimeInterval = 0.12
-
     @discardableResult
     static func copyTextToClipboard(_ text: String) -> Bool {
         copyToClipboard(.text(text))
@@ -41,14 +39,15 @@ enum PasteController {
     @discardableResult
     static func paste(_ content: PreparedClipboardContent, targetApplication: NSRunningApplication?) async -> Bool {
         guard !Task.isCancelled else { return false }
-        if let targetApplication, targetApplication.processIdentifier != ProcessInfo.processInfo.processIdentifier {
-            guard !targetApplication.isTerminated else { return false }
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let target = targetApplication.flatMap { $0.processIdentifier == ownPID ? nil : $0 }
+        if let target {
+            guard !target.isTerminated else { return false }
             let activePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-            guard activePID == targetApplication.processIdentifier || activePID == ProcessInfo.processInfo.processIdentifier else { return false }
+            guard activePID == target.processIdentifier || activePID == ownPID else { return false }
         }
-        guard copyToClipboard(content) else { return false }
-        let pasteboardChange = NSPasteboard.general.changeCount
-        return await prepareAndSimulatePaste(into: targetApplication, pasteboardChange: pasteboardChange)
+        guard copyToClipboard(content), let target else { return false }
+        return await Paster.paste(into: target, expectedChangeCount: NSPasteboard.general.changeCount)
     }
 
     private static func writeToPasteboard(_ write: (NSPasteboard) -> Bool) -> Bool {
@@ -60,47 +59,6 @@ enum PasteController {
             name: .bufferDidWritePasteboard,
             object: NSNumber(value: changeCount)
         )
-        return true
-    }
-
-    private static func prepareAndSimulatePaste(
-        into targetApplication: NSRunningApplication?, pasteboardChange: Int
-    ) async -> Bool {
-        guard let targetApplication,
-              !targetApplication.isTerminated,
-              targetApplication.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return false }
-        return await pasteIfUnchanged(
-            on: .general, expectedChangeCount: pasteboardChange,
-            prepare: { targetApplication.activate() },
-            isTargetActive: { NSWorkspace.shared.frontmostApplication?.processIdentifier == targetApplication.processIdentifier },
-            sendPaste: simulatePaste)
-    }
-
-    static func pasteIfUnchanged(
-        on pasteboard: NSPasteboard, expectedChangeCount: Int,
-        prepare: () -> Void, isTargetActive: () -> Bool, sendPaste: () -> Bool
-    ) async -> Bool {
-        guard !Task.isCancelled, pasteboard.changeCount == expectedChangeCount else { return false }
-        prepare()
-        do {
-            try await Task.sleep(nanoseconds: UInt64(pasteDelay * 1_000_000_000))
-            try Task.checkCancellation()
-        } catch {
-            return false
-        }
-        guard pasteboard.changeCount == expectedChangeCount, isTargetActive() else { return false }
-        return sendPaste()
-    }
-
-    private static func simulatePaste() -> Bool {
-        guard AXIsProcessTrusted(), let source = CGEventSource(stateID: .hidSystemState),
-              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else { return false }
-        for event in [keyDown, keyUp] {
-            event.flags = .maskCommand
-            event.setIntegerValueField(.eventSourceUserData, value: Paster.ollieEventTag)
-            event.post(tap: .cgAnnotatedSessionEventTap)
-        }
         return true
     }
 }

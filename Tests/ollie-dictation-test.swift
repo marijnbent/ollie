@@ -51,6 +51,7 @@ private final class HistoryFixture: TranscriptHistoryPersisting, @unchecked Send
         ShortcutRuntimeTests().testSuperCapsLockCyclesOncePerPressOnlyWhileRecording()
         ShortcutRuntimeTests().testCompanionKeyDiscardsRecordingWhileShortcutIsHeldWithoutConsumingKey()
         ShortcutRuntimeTests().testFnKeyDownDoesNotDiscardItsOwnQuickPress()
+        ShortcutRuntimeTests().testShippedThresholdClassifiesByListenedTime()
         await PasteRuntimeTests().testNewCopyAndStopCancelPendingRestoration()
         diagnosticLogging()
         try await historyPersistence()

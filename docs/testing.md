@@ -695,8 +695,9 @@ that the full email and the original clipboard survive. Harnesses use a private 
 native text editor; they do not prove browser delivery.
 
 The `ollie-*-test` harnesses exercise imported services, clipboard storage, serialized AX work,
-recording cancellation and reconnect, and verified paste restoration with synthetic files and fake
-providers. Dictation also covers audio-only QuickTime import, embedded-text exclusion, batch Scribe
+recording cancellation and reconnect, verified paste restoration with synthetic files and fake
+providers, the palette paste waiting for a slow target, and dictation tap-versus-hold judged by 0.5 s
+of listened audio. Dictation also covers audio-only QuickTime import, embedded-text exclusion, batch Scribe
 requests, converted WAV compatibility, local audio validation, explicit start after staging,
 replacement guards during a job, import cancellation and results with History off. Private pasteboards
 cover native promise discovery, synthetic receiver callbacks, cancellation of an unfinished export,

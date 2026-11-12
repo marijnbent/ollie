@@ -275,9 +275,6 @@ final class PasteRuntime {
                 snapshot: snapshot,
                 remainingAttempts: verificationAttemptCount
             )
-        } catch is CancellationError {
-            emit(.status(.cancelled))
-            emit(.log("Recording cancelled.", .info))
         } catch {
             emit(.status(.cancelled))
             emit(.log("Recording cancelled.", .info))
@@ -320,7 +317,7 @@ final class PasteRuntime {
             emit(.log("Auto-paste confirmed. Restored previous clipboard.", .info))
         case .pending:
             guard remainingAttempts > 1 else {
-                handlePasteVerificationFailure(.timedOut)
+                handlePasteVerificationFailure()
                 return
             }
             schedulePasteVerification(
@@ -328,16 +325,12 @@ final class PasteRuntime {
                 snapshot: snapshot,
                 remainingAttempts: remainingAttempts - 1
             )
-        case .unconfirmed(let reason):
-            handlePasteVerificationFailure(reason)
+        case .unconfirmed:
+            handlePasteVerificationFailure()
         }
     }
 
-    private func handlePasteVerificationFailure(_ reason: PasteVerificationFailureReason) {
-        guard reason != .timedOut else {
-            emit(.log("Could not confirm auto-paste. Kept transcript on the clipboard.", .warning))
-            return
-        }
+    private func handlePasteVerificationFailure() {
         emit(.log("Could not confirm auto-paste. Kept transcript on the clipboard.", .warning))
     }
 }

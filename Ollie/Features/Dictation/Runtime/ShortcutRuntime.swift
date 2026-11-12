@@ -126,11 +126,12 @@ final class ShortcutRuntime {
         let phase = phaseProvider?() ?? .idle
         let ownership = ownershipProvider?()
 
-        let elapsedSinceStart: TimeInterval
-        if let ownership, ownership.ownerShortcutID == shortcutID {
-            elapsedSinceStart = max(0, clock.now() - ownership.recordingStartedAt)
+        let listenedDuration: TimeInterval
+        if let ownership, ownership.ownerShortcutID == shortcutID,
+           let listeningStartedAt = ownership.listeningStartedAt {
+            listenedDuration = max(0, clock.now() - listeningStartedAt)
         } else {
-            elapsedSinceStart = 0
+            listenedDuration = 0
         }
 
         let actions = stateMachine.reduce(
@@ -140,7 +141,7 @@ final class ShortcutRuntime {
                 mode: mode,
                 phase: phase,
                 ownership: ownership,
-                elapsedSinceStart: elapsedSinceStart
+                listenedDuration: listenedDuration
             )
         )
 

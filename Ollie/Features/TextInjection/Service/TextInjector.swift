@@ -349,17 +349,7 @@ final class TextInjector {
                 targetApp: nil,
                 promptForInteractiveAccessibility: false)
         }
-        activate(targetApp)
-        for _ in 0..<50 {
-            if targetApp.isActive,
-                NSWorkspace.shared.frontmostApplication?.processIdentifier
-                    == targetApp.processIdentifier
-            {
-                return true
-            }
-            guard await wait(for: .milliseconds(20)) else { return false }
-        }
-        return false
+        return await Paster.activateAndWait(for: targetApp)
     }
 
     private struct AccessibilityTarget {

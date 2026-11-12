@@ -30,7 +30,7 @@ final class EmojiCoordinator {
     func copyEmoji(_ entry: EmojiEntry) {
         frequentEmoji.record(entry.glyph)
         paletteCoordinator.hidePalette(restoreFocus: false)
-        Paster.copyString(entry.display(tone: settings.emojiSkinTone))
+        Paster.copyPlainText(entry.display(tone: settings.emojiSkinTone))
     }
 
     func pasteEmojiKeepingWindowOpen(_ entry: EmojiEntry) {

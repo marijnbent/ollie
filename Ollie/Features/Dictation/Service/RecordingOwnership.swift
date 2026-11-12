@@ -4,6 +4,6 @@ struct RecordingOwnership {
     let ownerShortcutID: UUID
     let ownerMode: ShortcutMode
     var isLatched: Bool
-    let recordingStartedAt: TimeInterval
+    var listeningStartedAt: TimeInterval?
     let sessionID: UUID
 }

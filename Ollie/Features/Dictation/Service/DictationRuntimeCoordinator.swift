@@ -108,7 +108,7 @@ final class DictationRuntimeCoordinator {
         self.shortcutRuntime = ShortcutRuntime(
             eventMonitor: eventMonitorPort,
             clock: clockPort,
-            clickHoldThreshold: 0.2
+            clickHoldThreshold: ShortcutStateMachine.defaultClickHoldThreshold
         )
 
         bindRuntimes()

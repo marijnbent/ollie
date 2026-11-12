@@ -359,7 +359,7 @@ final class RecordingRuntime {
             ownerShortcutID: ownerShortcutID,
             ownerMode: ownerMode,
             isLatched: isLatched,
-            recordingStartedAt: clock.now(),
+            listeningStartedAt: nil,
             sessionID: sessionID
         )
         phase = .recording
@@ -388,6 +388,7 @@ final class RecordingRuntime {
 
             captureStartTask = nil
             currentRecordingFormat = format
+            ownership?.listeningStartedAt = clock.now()
             let rawCapture = rawRecordingCaptureProvider(format)
             rawRecordingCapture = rawCapture
             prepareTranscriptionTiming()

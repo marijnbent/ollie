@@ -570,9 +570,11 @@ claims focus is private and several levels down — there is nothing to override
 `PaletteWindowController` records `previousApp` (the frontmost app) on show. Paste then targets that
 app:
 
-- `Paster.paste` activates it and posts a synthetic ⌘V via `CGEvent`.
-- `Paster.pasteInPlace` posts ⌘V straight to the app's PID _without_ activating it, so the palette can
-  stay open and frontmost (used by "paste keeping window open").
+- `Paster.paste(into:)` activates it, polls until it is frontmost (re-activating once, giving up after
+  1.5 s), waits a short settle, then posts a synthetic ⌘V. Every palette paste goes through it, and
+  `Paster.postCommandV` is the only code that synthesizes ⌘V.
+- `Paster.pasteStringInPlace` posts ⌘V straight to the app's PID _without_ activating it, so the
+  palette can stay open and frontmost (used by "paste keeping window open").
 
 Both require the Accessibility permission (`Permissions.ensureAccessibility()`).
 

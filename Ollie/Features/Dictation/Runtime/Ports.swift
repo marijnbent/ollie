@@ -76,7 +76,6 @@ enum PasteVerificationFailureReason: Equatable {
     case valueUnavailable
     case selectionUnavailable
     case mismatch
-    case timedOut
 }
 
 protocol PasteVerificationPort {

@@ -233,7 +233,9 @@ final class RecordingRuntimeTests {
         harness.runtime.handle(
             action: .start(ownerShortcutID: UUID(), ownerMode: .hold, latched: false)
         )
+        assertNil(harness.runtime.ownership?.listeningStartedAt)
         await waitUntil { harness.deepgram.connectCalls.count == 1 }
+        assertTrue(harness.runtime.ownership?.listeningStartedAt != nil)
         let audioData = Data([0x10, 0x00, 0x20, 0x00])
 
         harness.audio.emit(Linear16AudioChunk(data: audioData, meterLevel: 0.5))

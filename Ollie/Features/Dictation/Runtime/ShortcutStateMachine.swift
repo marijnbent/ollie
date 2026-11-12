@@ -11,7 +11,7 @@ struct ShortcutStateInput {
     let mode: ShortcutMode
     let phase: RecordingPhase
     let ownership: RecordingOwnership?
-    let elapsedSinceStart: TimeInterval
+    let listenedDuration: TimeInterval
 }
 
 enum ShortcutAction: Equatable {
@@ -25,6 +25,9 @@ enum ShortcutAction: Equatable {
 }
 
 struct ShortcutStateMachine {
+    /// Measured in listened time: a release before half a second of audio can't be push-to-talk.
+    static let defaultClickHoldThreshold: TimeInterval = 0.5
+
     let clickHoldThreshold: TimeInterval
 
     func reduce(input: ShortcutStateInput) -> [ShortcutAction] {
@@ -60,7 +63,7 @@ struct ShortcutStateMachine {
                 return [.noop]
             }
 
-            if input.elapsedSinceStart < clickHoldThreshold {
+            if input.listenedDuration < clickHoldThreshold {
                 return [.cancel]
             }
             return [.scheduleStop]
@@ -107,7 +110,7 @@ struct ShortcutStateMachine {
                 return [.noop]
             }
 
-            if input.elapsedSinceStart < clickHoldThreshold {
+            if input.listenedDuration < clickHoldThreshold {
                 return [.setLatched(true)]
             }
             return [.scheduleStop]

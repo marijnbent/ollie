@@ -1,8 +1,6 @@
 import AppKit
 import Foundation
 
-enum Paster { static let ollieEventTag: Int64 = 0x465245444945 }
-
 @main
 @MainActor
 struct OllieClipboardTests {
@@ -120,33 +118,48 @@ struct OllieClipboardTests {
         pasteboard.clearContents()
         pasteboard.setString("selected history item", forType: .string)
         let changeCount = pasteboard.changeCount
+        let fast = Paster.ActivationTiming(
+            poll: .milliseconds(1), reactivateAfter: .milliseconds(10), timeout: .milliseconds(60),
+            settle: .milliseconds(1))
         var pasteSent = false
-        let pasted = await PasteController.pasteIfUnchanged(
-            on: pasteboard, expectedChangeCount: changeCount, prepare: {}, isTargetActive: { true },
-            sendPaste: { pasteSent = true; return true })
-        check("unchanged clipboard permits paste", pasted && pasteSent)
+        func paste(
+            expecting count: Int? = changeCount, timing: Paster.ActivationTiming? = nil,
+            activate: () -> Void = {}, isTargetActive: () -> Bool
+        ) async -> Bool {
+            await Paster.paste(
+                on: pasteboard, expectedChangeCount: count, targetName: "fixture", activate: activate,
+                isTargetActive: isTargetActive, sendPaste: { pasteSent = true; return true },
+                timing: timing ?? fast)
+        }
+
+        check("unchanged clipboard permits paste", await paste(isTargetActive: { true }) && pasteSent)
+
         pasteSent = false
-        let replaced = await PasteController.pasteIfUnchanged(
-            on: pasteboard, expectedChangeCount: changeCount,
-            prepare: {
+        var polls = 0
+        let slow = await paste(isTargetActive: { polls += 1; return polls > 5 })
+        check("a target that comes forward after several polls still gets the paste", slow && pasteSent)
+
+        pasteSent = false
+        var activations = 0
+        let never = await paste(activate: { activations += 1 }, isTargetActive: { false })
+        check("a target that never comes forward gets no paste", !never && !pasteSent)
+        check("a slow target is asked to activate once more", activations == 2)
+
+        let replaced = await paste(
+            activate: {
                 pasteboard.clearContents()
                 pasteboard.setString("newer copy", forType: .string)
-            }, isTargetActive: { true }, sendPaste: { pasteSent = true; return true })
+            }, isTargetActive: { true })
         check("clipboard replacement prevents delayed paste", !replaced && !pasteSent)
         check("paste cancellation preserves the newer copy", pasteboard.string(forType: .string) == "newer copy")
-        let preparedCount = pasteboard.changeCount
-        let inactive = await PasteController.pasteIfUnchanged(
-            on: pasteboard, expectedChangeCount: preparedCount, prepare: {}, isTargetActive: { false },
-            sendPaste: { pasteSent = true; return true })
-        check("changed target prevents delayed paste", !inactive && !pasteSent)
-        var prepared = false
+
+        var activated = false
         let task = Task { @MainActor in
-            await PasteController.pasteIfUnchanged(
-                on: pasteboard, expectedChangeCount: preparedCount,
-                prepare: { prepared = true }, isTargetActive: { true },
-                sendPaste: { pasteSent = true; return true })
+            await paste(
+                expecting: nil, timing: Paster.ActivationTiming(settle: .seconds(5)),
+                activate: { activated = true }, isTargetActive: { true })
         }
-        while !prepared { await Task.yield() }
+        while !activated { await Task.yield() }
         task.cancel()
         let cancelled = await task.value
         check("cancelled operation never sends paste", !cancelled && !pasteSent)
