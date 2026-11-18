@@ -113,7 +113,7 @@ If a change touches anything in the right column, the harness on the left is man
 | `uninstall-test` | all five pure files in `Uninstall/Model/` |
 | `quicklink-template-test` | Current clipboard and selection expansion, URL encoding, arguments, dates and UUIDs |
 | `snippet-expansion-test` | Event-tap consumption and ordering, long multiline insertion, trigger boundaries, title matching, primary-screen AX conversion, popup clamping, deferred opening, cancellation, ranking and keys, and inline snippet drafts |
-| `text-injection-test` | Private pasteboard restoration and ownership, single-paste inline delivery, prepared and stale clipboard snapshots, Unicode delivery chunks, replacement confirmation and queue ordering |
+| `text-injection-test` | Private pasteboard restoration and ownership, single-paste inline delivery, lost-paste detection, prepared and stale clipboard snapshots, Unicode delivery chunks, replacement confirmation and queue ordering |
 | `quicklink-test` | all of `Quicklinks/Model/` |
 | `quicklink-coordinator-test` | Quicklink opening and inline argument focus — missing selection, manual input, clipboard fallback and default-app overrides; no platform effects |
 | `apple-shortcut-test` | all of `AppleShortcuts/Model/` — the `shortcuts list` parser and entry ids |

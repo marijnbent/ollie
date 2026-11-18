@@ -503,7 +503,7 @@ final class SnippetExpansionController {
             for event in events { replayEvent(event) }
         }
         guard injector.pasteInline(
-            content, deleting: typed.count, prepared: prepared, postEvent: postEvent, onFinished: resumeInput
+            content, replacing: typed, in: target, prepared: prepared, postEvent: postEvent, onFinished: resumeInput
         ) else {
             Diagnostics(category: "snippets").warning("Snippet paste skipped")
             cancelPendingInput()

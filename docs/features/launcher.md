@@ -830,7 +830,9 @@ The completing keystroke is consumed synchronously. When the focused AX value is
 forwarded trigger must end it, or the replacement stops instead of editing the wrong text; text-marker
 editors skip that check. Tagged backspaces then delete the forwarded trigger and one Command-V pastes
 the snippet from the clipboard, lent for 400 ms and restored afterwards. Keys typed meanwhile are
-buffered and replayed. A paste that cannot start logs `Snippet paste skipped`.
+buffered and replayed. A paste that cannot start logs `Snippet paste skipped`. When the lease ends and the
+focused AX value shows the trigger gone but nothing inserted, the snippet is typed as Unicode key events
+instead and `Snippet paste lost, typed instead` is logged; Chromium form fields sometimes drop the paste.
 
 Placement is re-read on every query refresh: range caret bounds, text-marker caret bounds, focused
 text element's leading edge, then focused window. A previously resolved position remains a stable

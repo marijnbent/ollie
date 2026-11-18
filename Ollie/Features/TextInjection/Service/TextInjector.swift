@@ -22,6 +22,15 @@ enum TextReplacementPolicy {
         return replacementRange
     }
 
+    /// What a field holds when the trigger was deleted and the paste never arrived.
+    static func valueWithoutTrigger(_ trigger: String, in value: String, selectedRange: NSRange) -> String? {
+        guard let replacementRange = triggerRange(trigger, in: value, selectedRange: selectedRange),
+              let range = Range(replacementRange, in: value) else { return nil }
+        var remaining = value
+        remaining.removeSubrange(range)
+        return remaining
+    }
+
     /// Chromium answers `.success` and applies nothing, so the value has to read back as we wrote it.
     static func confirmsReplacement(
         originalValue: String,
@@ -572,16 +581,20 @@ final class TextInjector {
 
     func pasteInline(
         _ text: String,
-        deleting characterCount: Int,
+        replacing trigger: String,
+        in targetApp: NSRunningApplication? = nil,
         prepared: PasteboardSnapshot? = nil,
         postEvent: (CGEvent) -> Void,
         onFinished: @escaping @MainActor () -> Void
     ) -> Bool {
         guard deliveryQueue.isIdle, finishPendingPasteboardOwnership(),
-              let events = Self.inlinePasteEvents(deleting: characterCount),
+              let events = Self.inlinePasteEvents(deleting: trigger.count),
               let lease = TemporaryPasteboardLease.begin(text: text, pasteboard: pasteboard, prepared: prepared)
         else { return false }
         activePasteboardLease = lease
+        let valueIfPasteIsLost = Self.focusedText(in: targetApp).flatMap {
+            TextReplacementPolicy.valueWithoutTrigger(trigger, in: $0.value, selectedRange: $0.selectedRange)
+        }
         deliveryQueue.enqueue { [weak self] in
             guard let self else {
                 _ = lease.restoreIfOwned()
@@ -590,10 +603,27 @@ final class TextInjector {
             }
             _ = await wait(for: inlinePasteDelay)
             finish(lease)
+            // Chromium form fields sometimes drop the ⌘V after the trigger is deleted.
+            if !text.isEmpty, let valueIfPasteIsLost,
+               Self.focusedText(in: targetApp)?.value == valueIfPasteIsLost {
+                Diagnostics(category: "snippets").warning("Snippet paste lost, typed instead")
+                _ = await deliverUsingUnicodeEvents(text, targetApp: targetApp)
+            }
             onFinished()
         }
         for event in events { postEvent(event) }
         return true
+    }
+
+    private static func focusedText(
+        in targetApp: NSRunningApplication?
+    ) -> (value: String, selectedRange: NSRange)? {
+        guard let targetApp,
+              let element = AccessibilityText.focusedElement(in: targetApp),
+              let value = stringValue(in: element),
+              let selectedRange = selectedRange(in: element)
+        else { return nil }
+        return (value, selectedRange)
     }
 
     static func inlinePasteEvents(deleting characterCount: Int) -> [CGEvent]? {

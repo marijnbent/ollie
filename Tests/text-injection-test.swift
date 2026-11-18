@@ -31,7 +31,7 @@ struct TextInjectionTests {
         var finished = false
         precondition(TextInjector.inlinePasteEvents(deleting: 3) != nil, "paste events can be constructed")
         precondition(PasteboardSnapshot(pasteboard: board) != nil, "rich clipboard can be preserved")
-        precondition(injector.pasteInline("marijn@marijnbent.nl", deleting: 3, postEvent: { event in
+        precondition(injector.pasteInline("marijn@marijnbent.nl", replacing: ">ma", postEvent: { event in
             posted.append(event)
             if event.type == .keyDown, event.getIntegerValueField(.keyboardEventKeycode) == 9 {
                 pasted.append(board.string(forType: .string) ?? "")
@@ -41,26 +41,26 @@ struct TextInjectionTests {
             $0.getIntegerValueField(.keyboardEventKeycode)
         } == [51, 51, 51, 9])
         precondition(pasted == ["marijn@marijnbent.nl"] && !finished)
-        precondition(!injector.pasteInline("overlap", deleting: 1, postEvent: { _ in
+        precondition(!injector.pasteInline("overlap", replacing: ">", postEvent: { _ in
             preconditionFailure("overlapping paste posted input")
         }, onFinished: {}))
         await pasteQueue.drain()
         precondition(finished && !injector.isDelivering)
         precondition(board.string(forType: .string) == "rich clipboard")
         precondition(board.data(forType: .rtf) == richText)
-        precondition(injector.pasteInline("temporary", deleting: 0, postEvent: { _ in }, onFinished: {}))
+        precondition(injector.pasteInline("temporary", replacing: "", postEvent: { _ in }, onFinished: {}))
         board.clearContents()
         board.setString("copied during paste", forType: .string)
         await pasteQueue.drain()
         precondition(board.string(forType: .string) == "copied during paste")
         let prepared = injector.prepareInlinePaste()
         precondition(prepared?.changeCount == board.changeCount, "prepared snapshot matches the clipboard")
-        precondition(injector.pasteInline("lent", deleting: 0, prepared: prepared, postEvent: { _ in }, onFinished: {}))
+        precondition(injector.pasteInline("lent", replacing: "", prepared: prepared, postEvent: { _ in }, onFinished: {}))
         await pasteQueue.drain()
         precondition(board.string(forType: .string) == "copied during paste", "prepared snapshot is restored")
         board.clearContents()
         board.setString("copied after preparing", forType: .string)
-        precondition(injector.pasteInline("lent", deleting: 0, prepared: prepared, postEvent: { _ in }, onFinished: {}))
+        precondition(injector.pasteInline("lent", replacing: "", prepared: prepared, postEvent: { _ in }, onFinished: {}))
         await pasteQueue.drain()
         precondition(board.string(forType: .string) == "copied after preparing", "stale snapshot is ignored")
 
@@ -86,6 +86,10 @@ struct TextInjectionTests {
             ">fi", in: "Different", selectedRange: NSRange(location: 9, length: 0)) == nil)
         precondition(TextReplacementPolicy.triggerRange(
             ">fi", in: ">fi", selectedRange: NSRange(location: 0, length: 3)) == nil)
+        precondition(TextReplacementPolicy.valueWithoutTrigger(
+            ">ma", in: "to >Ma end", selectedRange: NSRange(location: 6, length: 0)) == "to  end")
+        precondition(TextReplacementPolicy.valueWithoutTrigger(
+            ">ma", in: ">m", selectedRange: NSRange(location: 2, length: 0)) == nil)
 
         let queue = DeliveryQueue()
         var deliveries: [Int] = []
